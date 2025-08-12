@@ -1,131 +1,163 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-readme_file="${README_PATH}/README.md"
+# Faster, single-pass per-question extraction (no multiple greps),
+# accepts [x] or [X], and supports multi-answer keys like "a|c".
+
+set -u
+
+readme_file="${README_PATH:-.}/README.md"
 total_score=0
 
 # Function to check and grade a single question
 check_question() {
   local question_nbr="$1"
   local correct_answer_pattern="$2"
-  local _unused="$3"
-  local exit_on_fail="$4"
+  local _unused="${3-}"
+  local exit_on_fail="${4-}"
 
   # Normalize the correct answer pattern (remove spaces) to support formats like "a|c"
   local pattern_clean="${correct_answer_pattern//[[:space:]]/}"
 
-  # Extract question text (do not force a trailing '?')
-  question_text=$(grep -i -E "\*\*Q${question_nbr}\.\*\*.*$" "${readme_file}")
+  # Compute number of correct answers without spawning processes:
+  # count of '|' + 1
+  local pipes_only="${pattern_clean//[^|]/}"
+  local all_correct_count=$(( ${#pipes_only} + 1 ))
 
-  # Extract only the block of answers for the requested A{question_nbr}
-  # Capture lines after the **A{n}.** header up to (but not including) the next **A{m}.** header.
-  student_q_block=$(awk -v q="$question_nbr" '
-    BEGIN { IGNORECASE=1; inblk=0; }
-    {
-      curr = "\\*\\*A" q "\\.\\*\\*.*:";
+  # Single awk pass to:
+  # - capture the question line (**Qn.** ...)
+  # - capture only the checked options within the corresponding **An.** block
+  # - count checked and correct checked answers
+  # Output layout:
+  #   [0..N] lines: the checked response lines
+  #   last-1 line: "##QUESTION <question_line>"
+  #   last   line: "##COUNTS <checked_count> <correct_count>"
+  local awk_out
+  awk_out="$(awk -v q="$question_nbr" -v pat="$pattern_clean" '
+    BEGIN {
+      IGNORECASE = 1;
+      inblk = 0;
+      checked = 0;
+      correct = 0;
+      question = "";
+      qre = "\\*\\*Q" q "\\.\\*\\*.*$";
+      are = "\\*\\*A" q "\\.\\*\\*.*:";
       anyA = "\\*\\*A[0-9]+\\.\\*\\*.*:";
-      if ($0 ~ curr) { inblk=1; next }
-      if (inblk && $0 ~ anyA) { inblk=0 }
-      if (inblk) { print }
     }
-  ' "$readme_file")
+    {
+      if (question == "" && $0 ~ qre) { question = $0 }
+      if ($0 ~ are) { inblk = 1; next }
+      if (inblk && $0 ~ anyA) { inblk = 0 }
+      if (inblk) {
+        if ($0 ~ /\[[xX]\]/) {
+          print $0;
+          checked++;
+          if ($0 ~ ("\\*\\*\\((" pat ")\\)\\*\\*")) { correct++ }
+        }
+      }
+    }
+    END {
+      # Always output markers so the caller can parse reliably
+      print "##QUESTION " question;
+      printf("##COUNTS %d %d\n", checked, correct);
+    }
+  ' "$readme_file")"
 
-  # Keep only checked answers within that block (accept [x] or [X])
-  student_q_response=$(grep -E "\[[xX]\]" <<<"$student_q_block")
+  # Parse awk output without external processes
+  # Grab the last line (counts)
+  local counts_line="${awk_out##*$'\n'}"
+  # Remove last line
+  local tmp="${awk_out%$'\n'*}"
+  # Grab the second-to-last line (question marker)
+  local question_line="${tmp##*$'\n'}"
+  # Everything before that is the student response lines
+  local student_q_response="${tmp%$'\n'*}"
 
-  # Init exit_on_fail to false
-  if [[ -z "$exit_on_fail" ]]; then
-    exit_on_fail=false
+  # Extract values
+  local question_text="${question_line#\#\#QUESTION }"
+  local _tag checked_count correct_count
+  read -r _tag checked_count correct_count <<<"$counts_line"
+
+  # Normalize when there were no checked response lines
+  if [[ "$student_q_response" == "$tmp" ]]; then
+    # There was no newline before markers, meaning no responses present
+    student_q_response=""
   fi
 
-  # Check for empty response
-  if [[ -z "$student_q_response" ]]; then
-    echo "Question $question_nbr: Aucune réponse"
-    score=0
-    if [[ "$exit_on_fail" = true ]]; then
+  # Handle empty response
+  local score=0
+  if [[ -z "${student_q_response//[[:space:]]/}" || "$checked_count" -eq 0 ]]; then
+    printf "Question %d: Aucune réponse\n" "$question_nbr"
+    if [[ "${exit_on_fail:-false}" == true ]]; then
       exit 1
     else
       return
     fi
   fi
 
-  # Count correctly checked answers (accept [x] or [X]) using the cleaned pattern (e.g., a|c)
-  # Matches lines like: * [x] **(a)** ...
-  correct_count=$(grep -E -i -c "^\s*\*\s*\[[xX]\]\s+\*\*\(($pattern_clean)\)\*\*" <<<"$student_q_response")
-
-  # Count all checked answers (including extras) within the block
-  checked_count=$(grep -E -c "\[[xX]\]" <<<"$student_q_response")
-
-  # Count all possible correct answers (split on | after removing spaces)
-  all_correct_count=$(echo "$pattern_clean" | tr "|" "\n" | wc -l | tr -d ' ')
-
-  # Calculate score (1 for correct, -1 for extra); clamp to [0, 1]
-  score=$((correct_count - (checked_count - correct_count)))
-  score=$((score < 0 ? 0 : score))
-
-  if [[ $score -gt 1 && $score -eq $all_correct_count ]]; then
+  # Scoring:
+  # 1 point only if the set of checked answers exactly matches the set of correct answers.
+  # Otherwise 0.
+  if [[ "$checked_count" -eq "$all_correct_count" && "$correct_count" -eq "$all_correct_count" ]]; then
     score=1
   else
-    if [[ $score -ne 1 ]]; then
-      score=0
-    fi
+    score=0
   fi
 
-  echo "###########################"
-  echo -e "Question: $question_nbr \n$question_text"
-  echo -e "\nStudent response(s):\n$student_q_response"
-  echo -e "\nScore: $score"
-  echo "###########################"
+  printf "###########################\n"
+  printf "Question: %d \n%s\n" "$question_nbr" "$question_text"
+  printf "\nStudent response(s):\n%s\n" "$student_q_response"
+  printf "\nScore: %d\n" "$score"
+  printf "###########################\n"
 
-  if [[ "$exit_on_fail" = true ]] && [[ "$score" -eq 0 ]]; then
+  if [[ "${exit_on_fail:-false}" == true && "$score" -eq 0 ]]; then
     exit 1
   fi
 
   total_score=$((total_score + score))
 }
 
-IFS=$'\n'
-readarray -t answers < .github/assets/answers.txt
+# Load answers (one question per line; multiple correct letters separated by '|')
+IFS=$'\n' read -r -d '' -a answers < <(
+  # Use printf to ensure a trailing NUL for -d ''
+  # Trim whitespace-only lines and ignore blanks with pure bash after read
+  cat .github/assets/answers.txt; printf '\0'
+)
 
-# Remove any empty lines from answers (robust to accidental blank lines)
-answers=("${answers[@]/#/}")                      # no-op to ensure array exists
-tmp_answers=()
+# Trim and drop empty lines (pure bash)
+trimmed_answers=()
 for a in "${answers[@]}"; do
-  a_trimmed="${a#"${a%%[![:space:]]*}"}"          # ltrim
-  a_trimmed="${a_trimmed%"${a_trimmed##*[![:space:]]}"}"  # rtrim
-  if [[ -n "$a_trimmed" ]]; then
-    tmp_answers+=("$a_trimmed")
-  fi
+  # ltrim
+  a="${a#"${a%%[![:space:]]*}"}"
+  # rtrim
+  a="${a%"${a##*[![:space:]]}"}"
+  [[ -n "$a" ]] && trimmed_answers+=("$a")
 done
-answers=("${tmp_answers[@]}")
+answers=("${trimmed_answers[@]}")
 
 nbQuestions=${#answers[@]}
 
-# We extract per-question directly from the README, so we don't need pre-collected responses
-student_responses=""
-
-if [ $# -eq 0 ]; then
-  # Loop through each question and grade
+if [[ $# -eq 0 ]]; then
+  # Grade all questions
   for i in "${!answers[@]}"; do
     qnbr=$((i + 1))
-    check_question "${qnbr}" "${answers[$i]}" "$student_responses"
+    check_question "$qnbr" "${answers[$i]}" ""
   done
 
-  echo "==========================="
-  echo "Total Score.........: $total_score"
-  echo "Total Questions.....: ${nbQuestions}"
-  echo "==========================="
+  printf "===========================\n"
+  printf "Total Score.........: %d\n" "$total_score"
+  printf "Total Questions.....: %d\n" "$nbQuestions"
+  printf "===========================\n"
 
   exit 0
-elif [ $# -gt 2 ]; then
+elif [[ $# -gt 2 ]]; then
   echo "$0: Too many arguments: $*"
   exit 1
 else
-  if [ "$1" -eq 0 ]; then
+  if [[ "$1" -eq 0 ]]; then
     echo "Question number should start from 1"
     exit 1
   fi
-
-  check_question "$1" "${answers[$(( $1 - 1 ))]}" "$student_responses" true
+  check_question "$1" "${answers[$(( $1 - 1 ))]}" "" true
 fi
 
 exit 0
