@@ -1,20 +1,36 @@
 #!/bin/bash
 
-readme_file="$README_PATH"/README.md
+readme_file="${README_PATH}/README.md"
 total_score=0
 
 # Function to check and grade a single question
 check_question() {
   local question_nbr="$1"
   local correct_answer_pattern="$2"
-  local student_response="$3"
+  local _unused="$3"
   local exit_on_fail="$4"
 
-  # Extract question
-  question_text=$(grep -i -E "\*\*Q$question_nbr\.\*\*.*\?$" "${readme_file}")
+  # Normalize the correct answer pattern (remove spaces) to support formats like "a|c"
+  local pattern_clean="${correct_answer_pattern//[[:space:]]/}"
 
-  # Pre-process student response to extract relevant lines
-  student_q_response=$(grep -A 5 ".*$question_nbr" <<<"$student_response" | grep -i "\[x\]")
+  # Extract question text (do not force a trailing '?')
+  question_text=$(grep -i -E "\*\*Q${question_nbr}\.\*\*.*$" "${readme_file}")
+
+  # Extract only the block of answers for the requested A{question_nbr}
+  # Capture lines after the **A{n}.** header up to (but not including) the next **A{m}.** header.
+  student_q_block=$(awk -v q="$question_nbr" '
+    BEGIN { IGNORECASE=1; inblk=0; }
+    {
+      curr = "\\*\\*A" q "\\.\\*\\*.*:";
+      anyA = "\\*\\*A[0-9]+\\.\\*\\*.*:";
+      if ($0 ~ curr) { inblk=1; next }
+      if (inblk && $0 ~ anyA) { inblk=0 }
+      if (inblk) { print }
+    }
+  ' "$readme_file")
+
+  # Keep only checked answers within that block (accept [x] or [X])
+  student_q_response=$(grep -E "\[[xX]\]" <<<"$student_q_block")
 
   # Init exit_on_fail to false
   if [[ -z "$exit_on_fail" ]]; then
@@ -32,29 +48,27 @@ check_question() {
     fi
   fi
 
-  # Count correctly checked answers using a more efficient method
-  correct_count=$(grep -i -E -c "\[x\] \*\*\(($correct_answer_pattern)\)\*\*" <<<"$student_q_response")
+  # Count correctly checked answers (accept [x] or [X]) using the cleaned pattern (e.g., a|c)
+  # Matches lines like: * [x] **(a)** ...
+  correct_count=$(grep -E -i -c "^\s*\*\s*\[[xX]\]\s+\*\*\(($pattern_clean)\)\*\*" <<<"$student_q_response")
 
-  # Count all checked answers (including extras)
-  checked_count=$(grep -i -c "\[x\]" <<<"$student_q_response")
+  # Count all checked answers (including extras) within the block
+  checked_count=$(grep -E -c "\[[xX]\]" <<<"$student_q_response")
 
-  # Count all possible correct answers
-  all_correct_count=$(echo "$correct_answer_pattern" | tr "|" "\n" | wc -l)
-  # score_step=$((all_correct_count > 1 ? 1/all_correct_count : 1))
-  # score_step=$(echo "scale=2; 1 / $all_correct_count" | bc)
+  # Count all possible correct answers (split on | after removing spaces)
+  all_correct_count=$(echo "$pattern_clean" | tr "|" "\n" | wc -l | tr -d ' ')
 
-  # Calculate score (1 for correct, -1 for extra)
+  # Calculate score (1 for correct, -1 for extra); clamp to [0, 1]
   score=$((correct_count - (checked_count - correct_count)))
-  score=$((score < 0 ? 0 : score))  # Ensure non-negative score
-  
+  score=$((score < 0 ? 0 : score))
+
   if [[ $score -gt 1 && $score -eq $all_correct_count ]]; then
     score=1
   else
-    if [[ $score -ne 1 ]]; then  # Only change score if it wasn't already 1
+    if [[ $score -ne 1 ]]; then
       score=0
     fi
   fi
-
 
   echo "###########################"
   echo -e "Question: $question_nbr \n$question_text"
@@ -69,24 +83,25 @@ check_question() {
   total_score=$((total_score + score))
 }
 
-# Define questions and answers
-# questions=(
-#   "Quelles modifications sont apportées lorsque vous ajoutez une deuxième activité à votre application en choisissant"
-#   "Que se passe-t-il si vous supprimez les éléments \`android:parentActivityName\` et \`<meta-data>\` de la deuxième déclaration d'activité du fichier \`AndroidManifest.xml\`\?"
-# )
-
-# answers=(
-#   "La deuxième activité est ajoutée en tant que classe Java. Vous devez toujours ajouter le fichier de mise en page (layout) XML."
-#   "Le deuxième fichier de mise en page (layout) XML d'activité est supprimé."
-# )
-
 IFS=$'\n'
-readarray -t answers <.github/assets/answers.txt
+readarray -t answers < .github/assets/answers.txt
+
+# Remove any empty lines from answers (robust to accidental blank lines)
+answers=("${answers[@]/#/}")                      # no-op to ensure array exists
+tmp_answers=()
+for a in "${answers[@]}"; do
+  a_trimmed="${a#"${a%%[![:space:]]*}"}"          # ltrim
+  a_trimmed="${a_trimmed%"${a_trimmed##*[![:space:]]}"}"  # rtrim
+  if [[ -n "$a_trimmed" ]]; then
+    tmp_answers+=("$a_trimmed")
+  fi
+done
+answers=("${tmp_answers[@]}")
 
 nbQuestions=${#answers[@]}
 
-# Read the student responses from the README.md file
-student_responses=$(grep -i -E -A 5 "\*\*A[0-9]+\.\*\*.*\:$" "${readme_file}")
+# We extract per-question directly from the README, so we don't need pre-collected responses
+student_responses=""
 
 if [ $# -eq 0 ]; then
   # Loop through each question and grade
@@ -112,10 +127,5 @@ else
 
   check_question "$1" "${answers[$(( $1 - 1 ))]}" "$student_responses" true
 fi
-
-# echo "rdme-score=${total_score}\n" >> $GITHUB_OUTPUT
-# echo "var_name: rdme-score"
-# echo "rdme-questions=${nbQuestions}\n" >> $GITHUB_OUTPUT
-# echo "var-name: rdme-questions"
 
 exit 0
