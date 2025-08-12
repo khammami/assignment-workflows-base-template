@@ -15,7 +15,7 @@
 
 📋 **A1.** Choisissez-en un:
 
-* [ ] **(a)** `answer1`
+* [x] **(a)** `answer1`
 * [ ] **(b)** `answer2`
 * [ ] **(c)** `answer3`
 * [ ] **(d)** `answer4`
@@ -26,7 +26,7 @@
 
 📋 **A2.** Choisissez-en un:
 
-* [ ] **(a)** `answer1`
+* [X] **(a)** `answer1`
 * [ ] **(b)** `answer2`
 * [ ] **(c)** `answer3`
 * [ ] **(d)** `answer4`
@@ -37,7 +37,7 @@
 
 📋 **A3.** Choisissez-en un:
 
-* [ ] **(a)** answer1
+* [x] **(a)** answer1
 * [ ] **(b)** answer2
 * [ ] **(c)** answer3
 * [ ] **(d)** answer4
@@ -58,7 +58,7 @@ More description here.
 
 📋 **A4.** Choisissez-en un:
 
-* [ ] **(a)** answer1
+* [x] **(a)** answer1
 * [ ] **(b)** answer2
 * [ ] **(c)** answer3
 * [ ] **(d)** answer4
