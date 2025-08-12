@@ -27,7 +27,7 @@ jobs:
     if: github.actor != 'github-classroom[bot]'
     steps:
       #Get the code
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Check if the application folder contains an Android project
       - name: Check for Android project (Exist)
@@ -74,7 +74,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Make all scripts executable
         run: |
