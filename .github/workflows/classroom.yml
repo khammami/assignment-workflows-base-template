@@ -1,0 +1,179 @@
+name: Autograding Tests
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+  repository_dispatch:
+
+permissions:
+  checks: write
+  actions: read
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  ANDROID_APP_PATH: "application"
+  README_PATH: "."
+
+jobs:
+  check-android-project:
+    name: Pre-flight Checks (Android Project)
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-classroom[bot]'
+    steps:
+      #Get the code
+      - uses: actions/checkout@v4
+
+      # Check if the application folder contains an Android project
+      - name: Check for Android project (Exist)
+        run: |
+          if [ -f "${{env.ANDROID_APP_PATH}}/build.gradle" ] || [ -f "${{env.ANDROID_APP_PATH}}/build.gradle.kts" ]; then
+              echo "Android project found"
+          else
+              echo "No Android project found"
+              exit 1
+          fi
+
+      - name: Check for Android project (Java)
+        run: |
+          if [ -n "$(find ${{env.ANDROID_APP_PATH}}/app/src/main/java -name "*.kt" -type f)" ]; then
+              echo "Module app is written in Kotlin"
+              exit 1
+          else
+              echo "Module app is written in Java"
+          fi
+
+  run-autograding-tests:
+    name: Autograding
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.actor != 'github-classroom[bot]'
+    needs: [check-android-project]
+    steps:
+      # To use with instrumentation tests
+      # - name: Delete unnecessary tools 🔧
+      #   uses: jlumbroso/free-disk-space@v1.3.1
+      #   with:
+      #     android: false # Don't remove Android tools
+      #     tool-cache: true # Remove image tool cache
+      #     dotnet: true
+      #     haskell: true
+      #     swap-storage: true
+
+      # To use with instrumentation tests
+      # Enable KVM for emulator
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Make all scripts executable
+        run: |
+          find .github/scripts -type f -name "*.sh" -exec chmod +x {} \;
+          chmod +x ${{env.ANDROID_APP_PATH}}/gradlew
+
+      - name: Copy CI gradle.properties
+        run: mkdir -p ~/.gradle ; cp .github/ci-gradle.properties ~/.gradle/gradle.properties
+
+      # Setup min version of Java required by Gradle v8
+      - name: set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      # Let gradle action handle all cache reated to gradle operations
+      - name: Gradle setup/cache
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false # Allow write to cache beside default branch
+
+      # Create env that need to be injected to child process
+      - name: Create file for setting env vars
+        # https://github.com/education/autograding/issues/69#issuecomment-1497674655
+        # https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions#using-secrets-in-a-workflow
+        # Define ANSWERS_SECRET_PASSPHRASE under your org secrets
+        env:
+          ANSWERS_SECRET_PASSPHRASE: ${{ secrets.ANSWERS_SECRET_PASSPHRASE }}
+        run: |
+          echo "#!/bin/sh" > setenv.sh
+          echo "export ANSWERS_SECRET_PASSPHRASE=\"$ANSWERS_SECRET_PASSPHRASE\"" >> setenv.sh
+          echo "export README_PATH=\"$README_PATH\"" >> setenv.sh
+          echo "export ANDROID_APP_PATH=\"$ANDROID_APP_PATH\"" >> setenv.sh
+          echo "export ANDROID_HOME=\"$ANDROID_HOME\"" >> setenv.sh
+          echo "export ANDROID_NDK=\"$ANDROID_NDK\"" >> setenv.sh
+          echo "export ANDROID_NDK_HOME=\"$ANDROID_NDK_HOME\"" >> setenv.sh
+          echo "export ANDROID_NDK_LATEST_HOME=\"$ANDROID_NDK_LATEST_HOME\"" >> setenv.sh
+          echo "export ANDROID_NDK_ROOT=\"$ANDROID_NDK_ROOT\"" >> setenv.sh
+          echo "export ANDROID_SDK_ROOT=\"$ANDROID_SDK_ROOT\"" >> setenv.sh
+          chmod +x setenv.sh
+
+      - name: Build Debug
+        id: build-debug
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: Build Debug
+          setup-command: ""
+          command: ". ./setenv.sh && ./$ANDROID_APP_PATH/gradlew assembleDebug --no-configuration-cache --stacktrace -p $ANDROID_APP_PATH"
+          timeout: 5
+          max-score: 5
+
+      - name: Q1
+        id: q1
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: Q1
+          setup-command: ". ./setenv.sh && ./.github/scripts/decrypt_answers.sh"
+          command: ". ./setenv.sh && ./.github/scripts/check_questions.sh 1"
+          timeout: 1
+          max-score: 1
+
+      - name: Q2
+        id: q2
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: Q2
+          setup-command: ". ./setenv.sh && ./.github/scripts/decrypt_answers.sh"
+          command: ". ./setenv.sh && ./.github/scripts/check_questions.sh 2"
+          timeout: 1
+          max-score: 1
+
+      - name: Q3
+        id: q3
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: Q3
+          setup-command: ". ./setenv.sh && ./.github/scripts/decrypt_answers.sh"
+          command: ". ./setenv.sh && ./.github/scripts/check_questions.sh 3"
+          timeout: 1
+          max-score: 1
+
+      - name: Q4
+        id: q4
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: Q4
+          setup-command: ". ./setenv.sh && ./.github/scripts/decrypt_answers.sh"
+          command: ". ./setenv.sh && ./.github/scripts/check_questions.sh 4"
+          timeout: 1
+          max-score: 1
+
+      - name: Autograding Reporter
+        uses: classroom-resources/autograding-grading-reporter@v1
+        env:
+          BUILD-DEBUG_RESULTS: "${{steps.build-debug.outputs.result}}"
+          Q1_RESULTS: "${{steps.q1.outputs.result}}"
+          Q2_RESULTS: "${{steps.q2.outputs.result}}"
+          Q3_RESULTS: "${{steps.q3.outputs.result}}"
+          Q4_RESULTS: "${{steps.q4.outputs.result}}"
+        with:
+          runners: build-debug,q1,q2,q3,q4
