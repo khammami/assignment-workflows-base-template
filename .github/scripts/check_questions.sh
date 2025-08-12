@@ -14,7 +14,7 @@ check_question() {
   question_text=$(grep -i -E "\*\*Q$question_nbr\.\*\*.*\?$" "${readme_file}")
 
   # Pre-process student response to extract relevant lines
-  student_q_response=$(grep -A 5 ".*$question_nbr" <<<"$student_response" | grep -i "\[X\]")
+  student_q_response=$(grep -A 5 ".*$question_nbr" <<<"$student_response" | grep -i "\[x\]")
 
   # Init exit_on_fail to false
   if [[ -z "$exit_on_fail" ]]; then
@@ -33,10 +33,10 @@ check_question() {
   fi
 
   # Count correctly checked answers using a more efficient method
-  correct_count=$(grep -E -c "\[X\] \*\*\(($correct_answer_pattern)\)\*\*" <<<"$student_q_response")
+  correct_count=$(grep -i -E -c "\[x\] \*\*\(($correct_answer_pattern)\)\*\*" <<<"$student_q_response")
 
   # Count all checked answers (including extras)
-  checked_count=$(grep -c "\[X\]" <<<"$student_q_response")
+  checked_count=$(grep -i -c "\[x\]" <<<"$student_q_response")
 
   # Count all possible correct answers
   all_correct_count=$(echo "$correct_answer_pattern" | tr "|" "\n" | wc -l)
