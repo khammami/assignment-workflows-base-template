@@ -97,6 +97,19 @@ jobs:
       - name: Copy CI gradle.properties
         run: mkdir -p ~/.gradle ; cp .github/ci-gradle.properties ~/.gradle/gradle.properties
 
+      # Setup min version of Java required by Gradle v8
+      - name: set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      # Let gradle action handle all cache related to gradle operations
+      - name: Gradle setup/cache
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false # Allow write to cache beside default branch
+
       - name: Android summary via Gradle (init script)
         id: android_summary
         shell: bash
@@ -145,19 +158,6 @@ jobs:
             echo "- language: ${{ steps.android_summary.outputs.language }}"
             echo
           } >> "$GITHUB_STEP_SUMMARY"
-
-      # Setup min version of Java required by Gradle v8
-      - name: set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: "21"
-          distribution: "temurin"
-
-      # Let gradle action handle all cache related to gradle operations
-      - name: Gradle setup/cache
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-read-only: false # Allow write to cache beside default branch
 
       # Create env that need to be injected to child process
       - name: Create file for setting env vars
