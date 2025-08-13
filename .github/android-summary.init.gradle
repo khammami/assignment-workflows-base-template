@@ -104,4 +104,10 @@ abstract class PrintAndroidSummaryTask extends DefaultTask {
   }
 }
 
-rootProject.tasks.register('printAndroidSummary', PrintAndroidSummaryTask)
+// rootProject.tasks.register('printAndroidSummary', PrintAndroidSummaryTask)
+
+gradle.projectsLoaded {
+  gradle.rootProject { p ->
+    p.tasks.register('printAndroidSummary', PrintAndroidSummaryTask)
+  }
+}
