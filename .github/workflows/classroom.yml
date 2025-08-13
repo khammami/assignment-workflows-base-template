@@ -144,10 +144,6 @@ jobs:
             echo "- versionCode: ${{ steps.android_summary.outputs.version_code }}"
             echo "- language: ${{ steps.android_summary.outputs.language }}"
             echo
-            echo "### Raw JSON"
-            echo '```json'
-            echo "${{ steps.android_summary.outputs.json }}"
-            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Setup min version of Java required by Gradle v8
