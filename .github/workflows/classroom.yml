@@ -112,10 +112,11 @@ jobs:
             printAndroidSummary --no-configuration-cache
 
           # Full JSON as a multi-line output
+          delim="GHJSON_$(date +%s)_$RANDOM"
           {
-            echo "json<<JSON"
+            echo "json<<$delim"
             cat android-summary.json
-            echo "JSON"
+            echo "$delim"
           } >> "$GITHUB_OUTPUT"
 
           # Extract first application module values as individual outputs
