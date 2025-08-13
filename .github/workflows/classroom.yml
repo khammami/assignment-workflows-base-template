@@ -97,6 +97,63 @@ jobs:
       - name: Copy CI gradle.properties
         run: mkdir -p ~/.gradle ; cp .github/ci-gradle.properties ~/.gradle/gradle.properties
 
+      - name: Android summary via Gradle (init script)
+        id: android_summary
+        shell: bash
+        env:
+          APP_PATH: ${{ env.ANDROID_APP_PATH }}
+        run: |
+          set -euo pipefail
+          cp .github/android-summary.init.gradle "$APP_PATH/"
+
+          "$APP_PATH/gradlew" -p "$APP_PATH" -q -I "$APP_PATH/android-summary.init.gradle" printAndroidSummary > android-summary.json
+
+          # Full JSON as a multi-line output
+          {
+            echo "json<<JSON"
+            cat android-summary.json
+            echo "JSON"
+          } >> "$GITHUB_OUTPUT"
+
+          # Extract first application module values as individual outputs
+          min_sdk=$(jq -r '.modules[] | select(.type=="application") | .min_sdk' android-summary.json | head -n1)
+          target_sdk=$(jq -r '.modules[] | select(.type=="application") | .target_sdk' android-summary.json | head -n1)
+          compile_sdk=$(jq -r '.modules[] | select(.type=="application") | .compile_sdk' android-summary.json | head -n1)
+          package_name=$(jq -r '.modules[] | select(.type=="application") | .package_name' android-summary.json | head -n1)
+          version_name=$(jq -r '.modules[] | select(.type=="application") | .version_name' android-summary.json | head -n1)
+          version_code=$(jq -r '.modules[] | select(.type=="application") | .version_code' android-summary.json | head -n1)
+          language=$(jq -r '.modules[] | select(.type=="application") | .language' android-summary.json | head -n1)
+
+          {
+            echo "min_sdk=$min_sdk"
+            echo "target_sdk=$target_sdk"
+            echo "compile_sdk=$compile_sdk"
+            echo "package_name=$package_name"
+            echo "version_name=$version_name"
+            echo "version_code=$version_code"
+            echo "language=$language"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Android project summary
+        if: always()
+        run: |
+          {
+            echo "## Android Project Summary"
+            echo
+            echo "**Package:** ${{ steps.android_summary.outputs.package_name }}"
+            echo "- minSdk: ${{ steps.android_summary.outputs.min_sdk }}"
+            echo "- targetSdk: ${{ steps.android_summary.outputs.target_sdk }}"
+            echo "- compileSdk: ${{ steps.android_summary.outputs.compile_sdk }}"
+            echo "- versionName: ${{ steps.android_summary.outputs.version_name }}"
+            echo "- versionCode: ${{ steps.android_summary.outputs.version_code }}"
+            echo "- language: ${{ steps.android_summary.outputs.language }}"
+            echo
+            echo "### Raw JSON"
+            echo '```json'
+            echo "${{ steps.android_summary.outputs.json }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # Setup min version of Java required by Gradle v8
       - name: set up JDK 21
         uses: actions/setup-java@v4
@@ -104,7 +161,7 @@ jobs:
           java-version: "21"
           distribution: "temurin"
 
-      # Let gradle action handle all cache reated to gradle operations
+      # Let gradle action handle all cache related to gradle operations
       - name: Gradle setup/cache
         uses: gradle/actions/setup-gradle@v4
         with:
