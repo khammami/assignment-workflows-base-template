@@ -106,7 +106,10 @@ jobs:
           set -euo pipefail
           cp .github/android-summary.init.gradle "$APP_PATH/"
 
-          "$APP_PATH/gradlew" -p "$APP_PATH" -q -I "android-summary.init.gradle" printAndroidSummary --no-configuration-cache > android-summary.json
+          "$APP_PATH/gradlew" -p "$APP_PATH" -q --console=plain \
+            -I "android-summary.init.gradle" \
+            -Dandroid.summary.out="$PWD/android-summary.json" \
+            printAndroidSummary --no-configuration-cache
 
           # Full JSON as a multi-line output
           {
