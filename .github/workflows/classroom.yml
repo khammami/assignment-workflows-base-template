@@ -21,15 +21,14 @@ env:
   README_PATH: "."
 
 jobs:
-  check-android-project:
-    name: Pre-flight Checks (Android Project)
+  run-autograding-tests:
+    name: Autograding
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: github.actor != 'github-classroom[bot]'
     steps:
-      #Get the code
-      - uses: actions/checkout@v4
-
-      # Check if the application folder contains an Android project
+      # Repository checks
+      # 1 - Check if the application folder contains an Android project
       - name: Check for Android project (Exist)
         run: |
           if [ -f "${{env.ANDROID_APP_PATH}}/build.gradle" ] || [ -f "${{env.ANDROID_APP_PATH}}/build.gradle.kts" ]; then
@@ -39,22 +38,28 @@ jobs:
               exit 1
           fi
 
-      - name: Check for Android project (Java)
+      # 2 - Check Gradle wrapper exists
+      - name: Check Gradle wrapper exists
+        shell: bash
         run: |
-          if [ -n "$(find ${{env.ANDROID_APP_PATH}}/app/src/main/java -name "*.kt" -type f)" ]; then
-              echo "Module app is written in Kotlin"
-              exit 1
+          set -euo pipefail
+          if [ -f "${ANDROID_APP_PATH}/gradlew" ]; then
+            echo "Gradle wrapper found."
           else
-              echo "Module app is written in Java"
+            echo "Gradle wrapper not found at ${ANDROID_APP_PATH}/gradlew"
+            exit 1
           fi
 
-  run-autograding-tests:
-    name: Autograding
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    if: github.actor != 'github-classroom[bot]'
-    needs: [check-android-project]
-    steps:
+      # 3 - Check for README.md
+      - name: Check for README.md
+        run: |
+          if [ -f "${{env.README_PATH}}/README.md" ]; then
+              echo "README.md found"
+          else
+              echo "No README.md found"
+              exit 1
+          fi
+
       # To use with instrumentation tests
       # - name: Delete unnecessary tools 🔧
       #   uses: jlumbroso/free-disk-space@v1.3.1
@@ -74,7 +79,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Make all scripts executable
         run: |
