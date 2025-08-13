@@ -27,10 +27,18 @@ jobs:
     timeout-minutes: 30
     if: github.actor != 'github-classroom[bot]'
     steps:
+      # Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
       # Repository checks
       # 1 - Check if the application folder contains an Android project
       - name: Check for Android project (Exist)
+        shell: bash
         run: |
+          set -euo pipefail
           if [ -f "${{env.ANDROID_APP_PATH}}/build.gradle" ] || [ -f "${{env.ANDROID_APP_PATH}}/build.gradle.kts" ]; then
               echo "Android project found"
           else
@@ -52,7 +60,9 @@ jobs:
 
       # 3 - Check for README.md
       - name: Check for README.md
+        shell: bash
         run: |
+          set -euo pipefail
           if [ -f "${{env.README_PATH}}/README.md" ]; then
               echo "README.md found"
           else
@@ -73,13 +83,11 @@ jobs:
       # To use with instrumentation tests
       # Enable KVM for emulator
       - name: Enable KVM
+        shell: bash
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-
-      - name: Checkout code
-        uses: actions/checkout@v5
 
       - name: Make all scripts executable
         run: |
