@@ -111,14 +111,6 @@ jobs:
             -Dandroid.summary.out="$PWD/android-summary.json" \
             printAndroidSummary --no-configuration-cache
 
-          # Full JSON as a multi-line output
-          delim="GHJSON_$(date +%s)_$RANDOM"
-          {
-            echo "json<<$delim"
-            cat android-summary.json
-            echo "$delim"
-          } >> "$GITHUB_OUTPUT"
-
           # Extract first application module values as individual outputs
           min_sdk=$(jq -r '.modules[] | select(.type=="application") | .min_sdk' android-summary.json | head -n1)
           target_sdk=$(jq -r '.modules[] | select(.type=="application") | .target_sdk' android-summary.json | head -n1)
