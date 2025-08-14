@@ -90,13 +90,11 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Make all scripts executable
-        shell: bash
         run: |
           find .github/scripts -type f -name "*.sh" -exec chmod +x {} \;
           chmod +x ${{env.ANDROID_APP_PATH}}/gradlew
 
       - name: Copy CI gradle.properties
-        shell: bash
         run: mkdir -p ~/.gradle ; cp .github/ci-gradle.properties ~/.gradle/gradle.properties
 
       # Setup min version of Java required by Gradle v8
@@ -147,7 +145,6 @@ jobs:
 
       - name: Android project summary
         if: always()
-        shell: bash
         run: |
           {
             echo "## Android Project Summary"
@@ -169,7 +166,6 @@ jobs:
         # Define ANSWERS_SECRET_PASSPHRASE under your org secrets
         env:
           ANSWERS_SECRET_PASSPHRASE: ${{ secrets.ANSWERS_SECRET_PASSPHRASE }}
-        shell: bash
         run: |
           echo "#!/bin/sh" > setenv.sh
           echo "export ANSWERS_SECRET_PASSPHRASE=\"$ANSWERS_SECRET_PASSPHRASE\"" >> setenv.sh
@@ -192,6 +188,17 @@ jobs:
           command: ". ./setenv.sh && ./$ANDROID_APP_PATH/gradlew assembleDebug --no-configuration-cache --stacktrace -p $ANDROID_APP_PATH"
           timeout: 5
           max-score: 5
+
+      # Spotless check (formatting) via init script, no student changes required
+      - name: Spotless
+        id: spotless
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: Spotless
+          setup-command: ". ./setenv.sh && cp .github/spotless.init.gradle $ANDROID_APP_PATH/"
+          command: ". ./setenv.sh && ./$ANDROID_APP_PATH/gradlew -p $ANDROID_APP_PATH --no-configuration-cache -I spotless.init.gradle spotlessCheck"
+          timeout: 5
+          max-score: 2
 
       - name: Q1
         id: q1
@@ -237,9 +244,10 @@ jobs:
         uses: classroom-resources/autograding-grading-reporter@v1
         env:
           BUILD-DEBUG_RESULTS: "${{steps.build-debug.outputs.result}}"
+          SPOTLESS_RESULTS: "${{steps.spotless.outputs.result}}"
           Q1_RESULTS: "${{steps.q1.outputs.result}}"
           Q2_RESULTS: "${{steps.q2.outputs.result}}"
           Q3_RESULTS: "${{steps.q3.outputs.result}}"
           Q4_RESULTS: "${{steps.q4.outputs.result}}"
         with:
-          runners: build-debug,q1,q2,q3,q4
+          runners: build-debug,spotless,q1,q2,q3,q4
