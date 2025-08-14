@@ -90,11 +90,13 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Make all scripts executable
+        shell: bash
         run: |
           find .github/scripts -type f -name "*.sh" -exec chmod +x {} \;
           chmod +x ${{env.ANDROID_APP_PATH}}/gradlew
 
       - name: Copy CI gradle.properties
+        shell: bash
         run: mkdir -p ~/.gradle ; cp .github/ci-gradle.properties ~/.gradle/gradle.properties
 
       # Setup min version of Java required by Gradle v8
@@ -145,6 +147,7 @@ jobs:
 
       - name: Android project summary
         if: always()
+        shell: bash
         run: |
           {
             echo "## Android Project Summary"
@@ -166,6 +169,7 @@ jobs:
         # Define ANSWERS_SECRET_PASSPHRASE under your org secrets
         env:
           ANSWERS_SECRET_PASSPHRASE: ${{ secrets.ANSWERS_SECRET_PASSPHRASE }}
+        shell: bash
         run: |
           echo "#!/bin/sh" > setenv.sh
           echo "export ANSWERS_SECRET_PASSPHRASE=\"$ANSWERS_SECRET_PASSPHRASE\"" >> setenv.sh
