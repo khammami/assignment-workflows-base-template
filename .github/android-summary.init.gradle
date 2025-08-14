@@ -1,0 +1,113 @@
+import groovy.json.JsonOutput
+import org.gradle.api.DefaultTask
+import org.gradle.api.tasks.TaskAction
+import org.gradle.work.DisableCachingByDefault
+
+@DisableCachingByDefault(because = "Diagnostic reporting task with no declared inputs/outputs")
+abstract class PrintAndroidSummaryTask extends DefaultTask {
+  @TaskAction
+  void run() {
+    def root = project.rootProject
+    def modules = []
+
+    root.allprojects { p ->
+      def isApp = p.plugins.hasPlugin('com.android.application')
+      def isLib = p.plugins.hasPlugin('com.android.library')
+      if (!(isApp || isLib)) return
+
+      def android = p.extensions.findByName('android')
+      if (android == null) return
+      def dfl = android.hasProperty('defaultConfig') ? android.defaultConfig : null
+
+      // Compile SDK
+      def compileSdk = null
+      if (android.hasProperty('compileSdk')) {
+        compileSdk = android.compileSdk
+      } else if (android.hasProperty('compileSdkVersion')) {
+        def v = android.compileSdkVersion
+        compileSdk = (v instanceof Number) ? v : (v?.toString()?.replace('android-',''))
+      }
+
+      // Namespace / applicationId
+      def namespace = android.hasProperty('namespace') ? android.namespace : null
+      def applicationId = (dfl != null && dfl.hasProperty('applicationId')) ? dfl.applicationId : null
+
+      // SDKs
+      def minSdk = null
+      if (dfl != null) {
+        if (dfl.hasProperty('minSdk')) {
+          minSdk = dfl.minSdk
+        } else if (dfl.hasProperty('minSdkVersion')) {
+          def m = dfl.minSdkVersion
+          minSdk = m?.hasProperty('apiLevel') ? m.apiLevel : m
+        }
+      }
+
+      def targetSdk = null
+      if (dfl != null) {
+        if (dfl.hasProperty('targetSdk')) {
+          targetSdk = dfl.targetSdk
+        } else if (dfl.hasProperty('targetSdkVersion')) {
+          def t = dfl.targetSdkVersion
+          targetSdk = t?.hasProperty('apiLevel') ? t.apiLevel : t
+        }
+      }
+
+      // Versioning
+      def versionName = (dfl != null && dfl.hasProperty('versionName')) ? dfl.versionName : null
+      def versionCode = (dfl != null && dfl.hasProperty('versionCode')) ? dfl.versionCode : null
+
+      // Language detection (best effort)
+      int javaCount = 0; int ktCount = 0
+      def srcDir = new File(p.projectDir, 'src')
+      if (srcDir.exists()) {
+        srcDir.eachFileRecurse { f ->
+          if (f.isFile()) {
+            if (f.name.endsWith('.java')) javaCount++
+            if (f.name.endsWith('.kt'))   ktCount++
+          }
+        }
+      }
+      def language = (ktCount>0 && javaCount>0) ? 'mixed' : (ktCount>0 ? 'kotlin' : (javaCount>0 ? 'java' : 'none'))
+
+      modules << [
+        project_path  : p.path,
+        project_name  : p.name,
+        type          : isApp ? 'application' : 'library',
+        package_name  : applicationId ?: namespace,
+        application_id: applicationId,
+        namespace     : namespace,
+        compile_sdk   : compileSdk,
+        target_sdk    : targetSdk,
+        min_sdk       : minSdk,
+        version_name  : versionName,
+        version_code  : versionCode,
+        language      : language,
+        java_files    : javaCount,
+        kotlin_files  : ktCount
+      ]
+    }
+
+    def payload = [ root_project: root.name, modules: modules ]
+    def json = JsonOutput.prettyPrint(JsonOutput.toJson(payload))
+
+    // If a destination file is provided, write there; else print to stdout
+    def outPath = System.getProperty('android.summary.out')
+    if (outPath) {
+      def outFile = new File(outPath)
+      outFile.parentFile?.mkdirs()
+      outFile.text = json
+      logger.lifecycle("Wrote Android summary to: ${outFile.absolutePath}")
+    } else {
+      println json
+    }
+  }
+}
+
+// rootProject.tasks.register('printAndroidSummary', PrintAndroidSummaryTask)
+
+gradle.projectsLoaded {
+  gradle.rootProject { p ->
+    p.tasks.register('printAndroidSummary', PrintAndroidSummaryTask)
+  }
+}

@@ -21,17 +21,24 @@ env:
   README_PATH: "."
 
 jobs:
-  check-android-project:
-    name: Pre-flight Checks (Android Project)
+  run-autograding-tests:
+    name: Autograding
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: github.actor != 'github-classroom[bot]'
     steps:
-      #Get the code
-      - uses: actions/checkout@v5
+      # Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
 
-      # Check if the application folder contains an Android project
+      # Repository checks
+      # 1 - Check if the application folder contains an Android project
       - name: Check for Android project (Exist)
+        shell: bash
         run: |
+          set -euo pipefail
           if [ -f "${{env.ANDROID_APP_PATH}}/build.gradle" ] || [ -f "${{env.ANDROID_APP_PATH}}/build.gradle.kts" ]; then
               echo "Android project found"
           else
@@ -39,22 +46,30 @@ jobs:
               exit 1
           fi
 
-      - name: Check for Android project (Java)
+      # 2 - Check Gradle wrapper exists
+      - name: Check Gradle wrapper exists
+        shell: bash
         run: |
-          if [ -n "$(find ${{env.ANDROID_APP_PATH}}/app/src/main/java -name "*.kt" -type f)" ]; then
-              echo "Module app is written in Kotlin"
-              exit 1
+          set -euo pipefail
+          if [ -f "${ANDROID_APP_PATH}/gradlew" ]; then
+            echo "Gradle wrapper found."
           else
-              echo "Module app is written in Java"
+            echo "Gradle wrapper not found at ${ANDROID_APP_PATH}/gradlew"
+            exit 1
           fi
 
-  run-autograding-tests:
-    name: Autograding
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    if: github.actor != 'github-classroom[bot]'
-    needs: [check-android-project]
-    steps:
+      # 3 - Check for README.md
+      - name: Check for README.md
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f "${{env.README_PATH}}/README.md" ]; then
+              echo "README.md found"
+          else
+              echo "No README.md found"
+              exit 1
+          fi
+
       # To use with instrumentation tests
       # - name: Delete unnecessary tools 🔧
       #   uses: jlumbroso/free-disk-space@v1.3.1
@@ -68,13 +83,11 @@ jobs:
       # To use with instrumentation tests
       # Enable KVM for emulator
       - name: Enable KVM
+        shell: bash
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-
-      - name: Checkout code
-        uses: actions/checkout@v5
 
       - name: Make all scripts executable
         run: |
@@ -91,11 +104,60 @@ jobs:
           java-version: "21"
           distribution: "temurin"
 
-      # Let gradle action handle all cache reated to gradle operations
+      # Let gradle action handle all cache related to gradle operations
       - name: Gradle setup/cache
         uses: gradle/actions/setup-gradle@v4
         with:
           cache-read-only: false # Allow write to cache beside default branch
+
+      - name: Android summary via Gradle (init script)
+        id: android_summary
+        shell: bash
+        env:
+          APP_PATH: ${{ env.ANDROID_APP_PATH }}
+        run: |
+          set -euo pipefail
+          cp .github/android-summary.init.gradle "$APP_PATH/"
+
+          "$APP_PATH/gradlew" -p "$APP_PATH" -q --console=plain \
+            -I "android-summary.init.gradle" \
+            -Dandroid.summary.out="$PWD/android-summary.json" \
+            printAndroidSummary --no-configuration-cache
+
+          # Extract first application module values as individual outputs
+          min_sdk=$(jq -r '.modules[] | select(.type=="application") | .min_sdk' android-summary.json | head -n1)
+          target_sdk=$(jq -r '.modules[] | select(.type=="application") | .target_sdk' android-summary.json | head -n1)
+          compile_sdk=$(jq -r '.modules[] | select(.type=="application") | .compile_sdk' android-summary.json | head -n1)
+          package_name=$(jq -r '.modules[] | select(.type=="application") | .package_name' android-summary.json | head -n1)
+          version_name=$(jq -r '.modules[] | select(.type=="application") | .version_name' android-summary.json | head -n1)
+          version_code=$(jq -r '.modules[] | select(.type=="application") | .version_code' android-summary.json | head -n1)
+          language=$(jq -r '.modules[] | select(.type=="application") | .language' android-summary.json | head -n1)
+
+          {
+            echo "min_sdk=$min_sdk"
+            echo "target_sdk=$target_sdk"
+            echo "compile_sdk=$compile_sdk"
+            echo "package_name=$package_name"
+            echo "version_name=$version_name"
+            echo "version_code=$version_code"
+            echo "language=$language"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Android project summary
+        if: always()
+        run: |
+          {
+            echo "## Android Project Summary"
+            echo
+            echo "**Package:** ${{ steps.android_summary.outputs.package_name }}"
+            echo "- minSdk: ${{ steps.android_summary.outputs.min_sdk }}"
+            echo "- targetSdk: ${{ steps.android_summary.outputs.target_sdk }}"
+            echo "- compileSdk: ${{ steps.android_summary.outputs.compile_sdk }}"
+            echo "- versionName: ${{ steps.android_summary.outputs.version_name }}"
+            echo "- versionCode: ${{ steps.android_summary.outputs.version_code }}"
+            echo "- language: ${{ steps.android_summary.outputs.language }}"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # Create env that need to be injected to child process
       - name: Create file for setting env vars
