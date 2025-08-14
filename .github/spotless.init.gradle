@@ -1,32 +1,29 @@
-// Gradle init script to apply Spotless without modifying student projects
-// Works with Gradle 8.x on GitHub Actions Java 21
+// Inject Spotless into each project and configure common formatters.
+// This works with Gradle 8.x and Java 21 without modifying student files.
 
-initscript {
-    repositories {
-        gradlePluginPortal()
-        mavenCentral()
-    }
-    dependencies {
-        // Update if needed; 6.25.0 is current stable in 2025
-        classpath("com.diffplug.spotless:spotless-plugin-gradle:6.25.0")
-    }
-}
-
-// Apply plugin to all projects and configure common formatters
 allprojects { Project p ->
-    apply plugin: "com.diffplug.spotless"
+    // Make the Spotless plugin available on the project's classpath
+    buildscript {
+        repositories {
+            // Spotless plugin is available on the Gradle Plugin Portal and Maven Central
+            maven { url = uri("https://plugins.gradle.org/m2/") }
+            mavenCentral()
+        }
+        dependencies {
+            classpath("com.diffplug.spotless:spotless-plugin-gradle:6.25.0")
+        }
+    }
 
+    // Apply the plugin programmatically (works for Groovy or Kotlin DSL projects)
+    pluginManager.apply("com.diffplug.spotless")
+
+    // Configure Spotless for typical Android/Kotlin projects
     spotless {
         // Kotlin source
         kotlin {
             target("**/*.kt")
             targetExclude("**/build/**")
-            // KtLint engine; pick a stable version compatible with Kotlin used in class
             ktlint("1.3.1")
-            // Example: tweak or remove overrides as you see fit
-            // editorConfigOverride(
-            //     ["ktlint_standard_filename": "disabled"]
-            // )
             trimTrailingWhitespace()
             endWithNewline()
         }
@@ -39,7 +36,7 @@ allprojects { Project p ->
             endWithNewline()
         }
 
-        // Java source (if present)
+        // Java (if present)
         java {
             target("**/*.java")
             targetExclude("**/build/**")
@@ -48,9 +45,9 @@ allprojects { Project p ->
             endWithNewline()
         }
 
-        // Misc text files (optional)
+        // Misc text (optional)
         format("misc") {
-            target("**/*.md", "**/.gitignore", "**/.gitattributes", "**/*.xml", "**/*.yaml", "**/*.yml")
+            target("**/*.md", "**/*.xml", "**/*.yml", "**/*.yaml", "**/.gitignore", "**/.gitattributes")
             targetExclude("**/build/**", ".gradle/**")
             trimTrailingWhitespace()
             endWithNewline()
