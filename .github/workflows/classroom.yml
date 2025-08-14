@@ -189,6 +189,16 @@ jobs:
           timeout: 5
           max-score: 5
 
+      # Spotless check (formatting) via init script, no student changes required
+      - name: Spotless
+        id: spotless
+        uses: classroom-resources/autograding-command-grader@v1
+        with:
+          test-name: Spotless
+          setup-command: "cp .github/spotless.init.gradle $ANDROID_APP_PATH/"
+          command: ". ./setenv.sh && ./$ANDROID_APP_PATH/gradlew -p $ANDROID_APP_PATH --no-configuration-cache --stacktrace -I spotless.init.gradle spotlessCheck"
+          timeout: 5
+          max-score: 2
       - name: Q1
         id: q1
         uses: classroom-resources/autograding-command-grader@v1
@@ -233,9 +243,10 @@ jobs:
         uses: classroom-resources/autograding-grading-reporter@v1
         env:
           BUILD-DEBUG_RESULTS: "${{steps.build-debug.outputs.result}}"
+          SPOTLESS_RESULTS: "${{steps.spotless.outputs.result}}"
           Q1_RESULTS: "${{steps.q1.outputs.result}}"
           Q2_RESULTS: "${{steps.q2.outputs.result}}"
           Q3_RESULTS: "${{steps.q3.outputs.result}}"
           Q4_RESULTS: "${{steps.q4.outputs.result}}"
         with:
-          runners: build-debug,q1,q2,q3,q4
+          runners: build-debug,spotless,q1,q2,q3,q4

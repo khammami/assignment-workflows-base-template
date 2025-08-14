@@ -1,0 +1,59 @@
+// Gradle init script to apply Spotless without modifying student projects
+// Works with Gradle 8.x on GitHub Actions Java 21
+
+initscript {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+    dependencies {
+        // Update if needed; 6.25.0 is current stable in 2025
+        classpath("com.diffplug.spotless:spotless-plugin-gradle:6.25.0")
+    }
+}
+
+// Apply plugin to all projects and configure common formatters
+allprojects { Project p ->
+    apply plugin: "com.diffplug.spotless"
+
+    spotless {
+        // Kotlin source
+        kotlin {
+            target("**/*.kt")
+            targetExclude("**/build/**")
+            // KtLint engine; pick a stable version compatible with Kotlin used in class
+            ktlint("1.3.1")
+            // Example: tweak or remove overrides as you see fit
+            // editorConfigOverride(
+            //     ["ktlint_standard_filename": "disabled"]
+            // )
+            trimTrailingWhitespace()
+            endWithNewline()
+        }
+
+        // Kotlin Gradle scripts
+        kotlinGradle {
+            target("**/*.gradle.kts")
+            ktlint("1.3.1")
+            trimTrailingWhitespace()
+            endWithNewline()
+        }
+
+        // Java source (if present)
+        java {
+            target("**/*.java")
+            targetExclude("**/build/**")
+            googleJavaFormat("1.17.0")
+            trimTrailingWhitespace()
+            endWithNewline()
+        }
+
+        // Misc text files (optional)
+        format("misc") {
+            target("**/*.md", "**/.gitignore", "**/.gitattributes", "**/*.xml", "**/*.yaml", "**/*.yml")
+            targetExclude("**/build/**", ".gradle/**")
+            trimTrailingWhitespace()
+            endWithNewline()
+        }
+    }
+}
