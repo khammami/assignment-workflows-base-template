@@ -1,24 +1,27 @@
-// Inject Spotless into each project and configure common formatters.
-// This works with Gradle 8.x and Java 21 without modifying student files.
+// Make Spotless available to THIS init script
+initscript {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("com.diffplug.spotless:spotless-plugin-gradle:7.2.1")
+    }
+}
 
 allprojects { Project p ->
-    // Make the Spotless plugin available on the project's classpath
-    buildscript {
-        repositories {
-            // Spotless plugin is available on the Gradle Plugin Portal and Maven Central
-            maven { url = uri("https://plugins.gradle.org/m2/") }
-            mavenCentral()
-        }
-        dependencies {
-            classpath("com.diffplug.spotless:spotless-plugin-gradle:6.25.0")
-        }
+    // Ensure repos for Spotless engines (ktlint, google-java-format)
+    p.repositories {
+        mavenCentral()
+        google()
+        maven { url = uri("https://plugins.gradle.org/m2/") }
     }
 
-    // Apply the plugin programmatically (works for Groovy or Kotlin DSL projects)
-    pluginManager.apply("com.diffplug.spotless")
+    // Apply Spotless by CLASS (works with init script classpath)
+    apply plugin: com.diffplug.gradle.spotless.SpotlessPlugin
 
-    // Configure Spotless for typical Android/Kotlin projects
-    spotless {
+    // Configure the Spotless extension explicitly to avoid missing-method issues
+    p.extensions.configure(com.diffplug.gradle.spotless.SpotlessExtension) { ext ->
         // Kotlin source
         kotlin {
             target("**/*.kt")
