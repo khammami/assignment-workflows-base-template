@@ -12,7 +12,7 @@ allprojects {
         kotlin {
             target("src/**/*.kt")
             targetExclude("**/build/**", "src/test/**", "src/androidTest/**", "src/testFixtures/**")
-            ktlint("1.3.1").editorConfigOverride([
+            ktlint().editorConfigOverride([
                 "android": "true",
                 "ktlint_standard_property-naming": "disabled"
             ])
@@ -22,14 +22,19 @@ allprojects {
         java {
             target("src/**/*.java")
             targetExclude("**/build/**", "src/test/**", "src/androidTest/**", "src/testFixtures/**")
-            googleJavaFormat("1.17.0")
+            googleJavaFormat().aosp()
         }
         
         // Gradle files
         kotlinGradle {
             target("**/*.gradle.kts")
             targetExclude("**/build/**")
-            ktlint("1.3.1")
+            ktlint()
+        }
+
+        // XML files
+        format("xml") {
+            target("**/*.xml")
         }
     }
 }
