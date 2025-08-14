@@ -1,4 +1,4 @@
-// Make Spotless available to THIS init script
+// Load Spotless for THIS init script (allowed)
 initscript {
     repositories {
         gradlePluginPortal()
@@ -9,51 +9,47 @@ initscript {
     }
 }
 
-allprojects { Project p ->
-    // Ensure repos for Spotless engines (ktlint, google-java-format)
-    p.repositories {
-        mavenCentral()
-        google()
-        maven { url = uri("https://plugins.gradle.org/m2/") }
+gradle.rootProject { root ->
+    // Prefer subprojects; if none exist, include the root
+    def targets = root.subprojects
+    if (targets.isEmpty()) {
+        targets = [root]
     }
 
-    // Apply Spotless by CLASS (works with init script classpath)
-    apply plugin: com.diffplug.gradle.spotless.SpotlessPlugin
+    targets.each { Project p ->
+        // Do NOT add p.repositories{} here — build uses FAIL_ON_PROJECT_REPOS
 
-    // Configure the Spotless extension explicitly to avoid missing-method issues
-    p.extensions.configure(com.diffplug.gradle.spotless.SpotlessExtension) { ext ->
-        // Kotlin source
-        kotlin {
-            target("**/*.kt")
-            targetExclude("**/build/**")
-            ktlint("1.3.1")
-            trimTrailingWhitespace()
-            endWithNewline()
-        }
+        // Apply Spotless by class using the init script classpath
+        p.apply plugin: com.diffplug.gradle.spotless.SpotlessPlugin
 
-        // Kotlin Gradle scripts
-        kotlinGradle {
-            target("**/*.gradle.kts")
-            ktlint("1.3.1")
-            trimTrailingWhitespace()
-            endWithNewline()
-        }
+        // Configure Spotless via its typed extension
+        p.extensions.configure(com.diffplug.gradle.spotless.SpotlessExtension) { ext ->
+            // Kotlin source
+            kotlin {
+                target("**/*.kt")
+                targetExclude("**/build/**")
+                ktlint("1.3.1") // Ensure this can be resolved from settings.gradle repositories
+                trimTrailingWhitespace()
+                endWithNewline()
+            }
 
-        // Java (if present)
-        java {
-            target("**/*.java")
-            targetExclude("**/build/**")
-            googleJavaFormat("1.17.0")
-            trimTrailingWhitespace()
-            endWithNewline()
-        }
+            // Kotlin Gradle scripts
+            kotlinGradle {
+                target("**/*.gradle.kts")
+                targetExclude("**/build/**")
+                ktlint("1.3.1")
+                trimTrailingWhitespace()
+                endWithNewline()
+            }
 
-        // Misc text (optional)
-        format("misc") {
-            target("**/*.md", "**/*.xml", "**/*.yml", "**/*.yaml", "**/.gitignore", "**/.gitattributes")
-            targetExclude("**/build/**", ".gradle/**")
-            trimTrailingWhitespace()
-            endWithNewline()
+            // Java (if present)
+            java {
+                target("**/*.java")
+                targetExclude("**/build/**")
+                googleJavaFormat("1.17.0")
+                trimTrailingWhitespace()
+                endWithNewline()
+            }
         }
     }
 }
