@@ -195,7 +195,7 @@ jobs:
         uses: classroom-resources/autograding-command-grader@v1
         with:
           test-name: Spotless
-          setup-command: "cp .github/spotless.init.gradle $ANDROID_APP_PATH/"
+          setup-command: ". ./setenv.sh && cp .github/spotless.init.gradle $ANDROID_APP_PATH/"
           command: ". ./setenv.sh && ./$ANDROID_APP_PATH/gradlew -p $ANDROID_APP_PATH --no-configuration-cache --stacktrace -I spotless.init.gradle spotlessCheck"
           timeout: 5
           max-score: 2
