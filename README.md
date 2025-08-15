@@ -114,4 +114,4 @@ Si le workflow GitHub Actions échoue, suivez ces étapes localement avant de re
     ```
 
 > [!IMPORTANT]
-> Si vous rencontrez des problèmes, n'hésitez pas à demander de l'aide en ouvrant une `issue` sur le dépôt GitHub.
+> Si vous rencontrez des problèmes, n'hésitez pas à demander de l'aide en ouvrant une [issue](../../issues/new/choose) sur le dépôt GitHub.
