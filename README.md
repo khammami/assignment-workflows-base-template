@@ -84,11 +84,12 @@ Si le workflow GitHub Actions échoue, suivez ces étapes localement avant de re
 
 2) Formatage du code (Spotless)
 
-   > [!TIP]
-        > Sous Windows, il est recommandé d'utiliser Git Bash pour exécuter ces commandes.  
-        > Sur macOS ou Linux, utilisez le terminal intégré ou votre shell préféré.
+    > [!TIP]
+    > Sous Windows, il est recommandé d'utiliser Git Bash pour exécuter ces commandes.  
+    > Sur macOS ou Linux, utilisez le terminal intégré ou votre shell préféré.
 
    * Vérifiez le formatage localement (utilisez le fichier init-script présent dans `.github`):
+
         > [!WARNING]
         > Assurez-vous d'exécuter ces commandes dans le répertoire `application` afin que Gradle utilise les bons chemins relatifs et le contexte du projet.
 
