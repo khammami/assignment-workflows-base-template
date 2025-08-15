@@ -71,7 +71,9 @@ More description here.
 >
 > Note here
 
-## Dépannage du workflow (CI)
+## Dépannage
+
+### workflow (CI)
 
 Si le workflow GitHub Actions échoue, suivez ces étapes localement avant de re-pousser:
 
