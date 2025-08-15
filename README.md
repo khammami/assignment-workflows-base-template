@@ -77,7 +77,7 @@ Si le workflow GitHub Actions échoue, suivez ces étapes localement avant de re
 
 1) Vérifiez la structure du projet
 
-   * Placez votre application dans le dossier `application/` comme demandé.
+   * Placez votre application dans le dossier [`application`](/application/) comme demandé.
    * Vérifiez que le fichier `README.md` est à la racine du projet.
 
 2) Formatage du code (Spotless)
