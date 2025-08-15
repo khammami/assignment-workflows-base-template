@@ -1,55 +1,40 @@
 // Load Spotless on the init script classpath (allowed)
 initscript {
-    repositories {
-        gradlePluginPortal()
-        mavenCentral()
-    }
-    dependencies {
-        classpath("com.diffplug.spotless:spotless-plugin-gradle:7.2.1")
-    }
+    repositories { gradlePluginPortal() }
+    dependencies { classpath("com.diffplug.spotless:spotless-plugin-gradle:7.2.1") }
 }
 
-gradle.rootProject { root ->
-    // Apply to subprojects, or fallback to root if single-module
-    def targets = root.subprojects
-    if (targets.isEmpty()) {
-        targets = [root]
-    }
-
-    targets.each { Project p ->
-        // Do NOT add p.repositories{} here (settings repositories are enforced)
-
-        // Apply Spotless using the plugin class from the init script classpath
-        p.apply plugin: com.diffplug.gradle.spotless.SpotlessPlugin
-
-        // Configure Spotless by explicitly using the extension instance
-        def ext = p.extensions.getByType(com.diffplug.gradle.spotless.SpotlessExtension)
-
-        // Kotlin source (ignore tests)
-        ext.kotlin { kt ->
-            kt.target("src/**/*.kt")
-            kt.targetExclude("**/build/**", "src/test/**", "src/androidTest/**", "src/testFixtures/**")
-            kt.ktlint("1.3.1")
-            kt.trimTrailingWhitespace()
-            kt.endWithNewline()
+allprojects {
+    apply plugin: com.diffplug.gradle.spotless.SpotlessPlugin
+    
+    spotless {
+        // Android/Kotlin projects
+        kotlin {
+            target("src/**/*.kt")
+            targetExclude("**/build/**", "src/test/**", "src/androidTest/**", "src/testFixtures/**")
+            ktlint().editorConfigOverride([
+                "android": "true",
+                "ktlint_standard_property-naming": "disabled"
+            ])
+        }
+        
+        // Java projects  
+        java {
+            target("src/**/*.java")
+            targetExclude("**/build/**", "src/test/**", "src/androidTest/**", "src/testFixtures/**")
+            googleJavaFormat().aosp()
+        }
+        
+        // Gradle files
+        kotlinGradle {
+            target("**/*.gradle.kts")
+            targetExclude("**/build/**")
+            ktlint()
         }
 
-        // Kotlin Gradle scripts
-        ext.kotlinGradle { kts ->
-            kts.target("**/*.gradle.kts")
-            kts.targetExclude("**/build/**")
-            kts.ktlint("1.3.1")
-            kts.trimTrailingWhitespace()
-            kts.endWithNewline()
-        }
-
-        // Java source (ignore tests)
-        ext.java { j ->
-            j.target("src/**/*.java")
-            j.targetExclude("**/build/**", "src/test/**", "src/androidTest/**", "src/testFixtures/**")
-            j.googleJavaFormat("1.17.0")
-            j.trimTrailingWhitespace()
-            j.endWithNewline()
+        // XML files
+        format("xml") {
+            target("**/*.xml")
         }
     }
 }
