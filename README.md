@@ -84,34 +84,47 @@ Si le workflow GitHub Actions échoue, suivez ces étapes localement avant de re
 
 2) Formatage du code (Spotless)
 
-   * Vérifiez le formatage localement (utilisez le fichier init-script présent dans `.github`):
+   > [!TIP]
+        > Sous Windows, il est recommandé d'utiliser Git Bash pour exécuter ces commandes.  
+        > Sur macOS ou Linux, utilisez le terminal intégré ou votre shell préféré.
 
-    ```bash
-    ./gradlew --init-script .github/spotless.init.gradle spotlessCheck
-    ```
+   * Vérifiez le formatage localement (utilisez le fichier init-script présent dans `.github`):
+        > [!WARNING]
+        > Assurez-vous d'exécuter ces commandes dans le répertoire `application` afin que Gradle utilise les bons chemins relatifs et le contexte du projet.
+
+        ```bash
+        ./gradlew --init-script .github/spotless.init.gradle spotlessCheck
+        ```
+
+        > [!CAUTION]
+        > Si vous avez des problèmes avec l'exécution de `gradlew`, essayez d'accorder les permissions d'exécution:
+        >
+        > ```bash
+        > chmod +x gradlew
+        > ```
 
    * Corrigez automatiquement le formatage:
 
-    ```bash
-    ./gradlew --init-script .github/spotless.init.gradle spotlessApply
-    ```
+        ```bash
+        ./gradlew --init-script .github/spotless.init.gradle spotlessApply
+        ```
 
    * Validez vos changements:
 
-    ```bash
-    # * branche `dev`
-    git add -A
-    git commit -m "style: apply Spotless formatting"
-    ```
+        ```bash
+        # * branche `dev`
+        git add -A
+        git commit -m "style: apply Spotless formatting"
+        ```
 
 3) Relancez le `workflow`
 
    * Poussez vos corrections sur la branche `dev` ou relancez manuellement le `workflow` dans l’onglet “Actions”.
 
-    ```bash
-    # * branche `dev`
-    git push
-    ```
+        ```bash
+        # * branche `dev`
+        git push
+        ```
 
 > [!IMPORTANT]
 > Si vous rencontrez des problèmes, n'hésitez pas à demander de l'aide en ouvrant une [issue](../../issues/new/choose) sur le dépôt GitHub.
