@@ -75,26 +75,26 @@ More description here.
 
 Si le workflow GitHub Actions échoue, suivez ces étapes localement avant de re-pousser:
 
-1) Vérifier la structure du projet
+1) Vérifiez la structure du projet
 
    * Placez votre application dans le dossier `application/` comme demandé.
    * Vérifiez que le fichier `README.md` est à la racine du projet.
 
 2) Formatage du code (Spotless)
 
-   * Vérifier le formatage localement (utilisez le fichier init-script présent dans `.github`):
+   * Vérifiez le formatage localement (utilisez le fichier init-script présent dans `.github`):
 
     ```bash
     ./gradlew --init-script .github/spotless.init.gradle spotlessCheck
     ```
 
-   * Corriger automatiquement le formatage:
+   * Corrigez automatiquement le formatage:
 
     ```bash
     ./gradlew --init-script .github/spotless.init.gradle spotlessApply
     ```
 
-   * Valider vos changements:
+   * Validez vos changements:
 
     ```bash
     # * branche `dev`
@@ -102,7 +102,7 @@ Si le workflow GitHub Actions échoue, suivez ces étapes localement avant de re
     git commit -m "style: apply Spotless formatting"
     ```
 
-3) Relancer le `workflow`
+3) Relancez le `workflow`
 
    * Poussez vos corrections sur la branche `dev` ou relancez manuellement le `workflow` dans l’onglet “Actions”.
 
