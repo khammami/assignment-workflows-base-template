@@ -106,7 +106,7 @@ jobs:
 
       # Let gradle action handle all cache related to gradle operations
       - name: Gradle setup/cache
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
         with:
           cache-read-only: false # Allow write to cache beside default branch
 
