@@ -1,12 +1,13 @@
 name: Autograding Tests
 
 on:
+  workflow_dispatch:
   push:
     branches:
-      - dev
-  workflow_dispatch:
-  repository_dispatch:
-
+      - main
+  pull_request:
+    branches:
+      - main
 permissions:
   checks: write
   actions: read
@@ -25,7 +26,9 @@ jobs:
     name: Autograding
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: github.actor != 'github-classroom[bot]'
+    if: >-
+      ${{ !github.event.repository.is_template
+          && github.actor != 'github-classroom[bot]' }}
     steps:
       # Checkout code
       - name: Checkout code
