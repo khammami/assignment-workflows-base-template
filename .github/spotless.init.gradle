@@ -1,7 +1,7 @@
 // Load Spotless on the init script classpath (allowed)
 initscript {
     repositories { gradlePluginPortal() }
-    dependencies { classpath("com.diffplug.spotless:spotless-plugin-gradle:7.2.1") }
+    dependencies { classpath("com.diffplug.spotless:spotless-plugin-gradle:8.1.0") }
 }
 
 allprojects {
