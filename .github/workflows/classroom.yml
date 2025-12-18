@@ -99,16 +99,42 @@ jobs:
 
       - name: Extract Java version from Gradle files
         run: |
-          JAVA_VERSION=$(grep -E "sourceCompatibility|targetCompatibility" ${{env.ANDROID_APP_PATH}}/build.gradle* | cut -d'=' -f2 | tr -d " \'\";")
+          set -euo pipefail
+          JAVA_VERSION=""
 
+          # Check app module build files first (build.gradle or build.gradle.kts)
+          for BUILD_FILE in "${{env.ANDROID_APP_PATH}}/app/build.gradle.kts" "${{env.ANDROID_APP_PATH}}/app/build.gradle" "${{env.ANDROID_APP_PATH}}/build.gradle.kts" "${{env.ANDROID_APP_PATH}}/build.gradle"; do
+            if [ -f "$BUILD_FILE" ]; then
+              echo "Checking $BUILD_FILE for Java version..."
+              JAVA_VERSION=$(grep -E "sourceCompatibility|targetCompatibility" "$BUILD_FILE" | head -n1 | cut -d'=' -f2 | tr -d " '\";VERSION.toInt()" || true)
+              
+              if [ -n "$JAVA_VERSION" ]; then
+                echo "Found Java version from compatibility settings: $JAVA_VERSION"
+                break
+              fi
+            fi
+          done
+
+          # Try toolchain configuration if not found
           if [ -z "$JAVA_VERSION" ]; then
             echo "Attempting to extract Java version from toolchain configuration..."
-            JAVA_VERSION=$(grep -Pzo '(?s)toolchains.*?languageVersion\s*=\s*JavaVersion\.of\("?\K[0-9]+' ${{env.ANDROID_APP_PATH}}/build.gradle* | tr -d '\0')
+            for BUILD_FILE in "${{env.ANDROID_APP_PATH}}/app/build.gradle.kts" "${{env.ANDROID_APP_PATH}}/app/build.gradle" "${{env.ANDROID_APP_PATH}}/build.gradle.kts" "${{env.ANDROID_APP_PATH}}/build.gradle"; do
+              if [ -f "$BUILD_FILE" ]; then
+                JAVA_VERSION=$(grep -Pzo '(?s)toolchains.*?languageVersion\s*=\s*JavaVersion\.of\("?\K[0-9]+' "$BUILD_FILE" | tr -d '\0' || true)
+                if [ -n "$JAVA_VERSION" ]; then
+                  echo "Found Java version from toolchain: $JAVA_VERSION"
+                  break
+                fi
+              fi
+            done
           fi
+
+          # Default to 17 if still not found
           if [ -z "$JAVA_VERSION" ]; then
             echo "Could not automatically determine Java version. Defaulting to 17."
             JAVA_VERSION=17 
           fi
+
           echo "Detected Java Version: $JAVA_VERSION"
           echo $JAVA_VERSION > ${{env.ANDROID_APP_PATH}}/.java-version
         shell: bash
