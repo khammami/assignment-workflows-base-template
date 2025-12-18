@@ -106,7 +106,15 @@ jobs:
           for BUILD_FILE in "${{env.ANDROID_APP_PATH}}/app/build.gradle.kts" "${{env.ANDROID_APP_PATH}}/app/build.gradle" "${{env.ANDROID_APP_PATH}}/build.gradle.kts" "${{env.ANDROID_APP_PATH}}/build.gradle"; do
             if [ -f "$BUILD_FILE" ]; then
               echo "Checking $BUILD_FILE for Java version..."
-              JAVA_VERSION=$(grep -E "sourceCompatibility|targetCompatibility" "$BUILD_FILE" | head -n1 | cut -d'=' -f2 | tr -d " '\";VERSION.toInt()" || true)
+              
+              # Try to extract version number from various formats:
+              # JavaVersion.VERSION_1_8 or JavaVersion.VERSION_11 -> 8 or 11
+              # sourceCompatibility = "17" -> 17
+              # sourceCompatibility = 17 -> 17
+              # sourceCompatibility JavaVersion.toVersion("11") -> 11
+              JAVA_VERSION=$(grep -E "(sourceCompatibility|targetCompatibility)" "$BUILD_FILE" | head -n1 | \
+                sed -E 's/.*VERSION_1_([0-9]+).*/\1/; s/.*VERSION_([0-9]+).*/\1/; s/.*[=:]\s*"?([0-9]+)"?.*/\1/; s/.*toVersion\("([0-9]+)"\).*/\1/' | \
+                grep -E '^[0-9]+$' || true)
               
               if [ -n "$JAVA_VERSION" ]; then
                 echo "Found Java version from compatibility settings: $JAVA_VERSION"
