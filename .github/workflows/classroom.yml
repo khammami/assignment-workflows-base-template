@@ -97,11 +97,27 @@ jobs:
       - name: Copy CI gradle.properties
         run: mkdir -p ~/.gradle ; cp .github/ci-gradle.properties ~/.gradle/gradle.properties
 
-      # Setup min version of Java required by Gradle v8
-      - name: set up JDK 21
+      - name: Extract Java version from Gradle files
+        run: |
+          JAVA_VERSION=$(grep -E "sourceCompatibility|targetCompatibility" ${{env.ANDROID_APP_PATH}}/build.gradle* | cut -d'=' -f2 | tr -d " \'\";")
+
+          if [ -z "$JAVA_VERSION" ]; then
+            echo "Attempting to extract Java version from toolchain configuration..."
+            JAVA_VERSION=$(grep -Pzo '(?s)toolchains.*?languageVersion\s*=\s*JavaVersion\.of\("?\K[0-9]+' ${{env.ANDROID_APP_PATH}}/build.gradle* | tr -d '\0')
+          fi
+          if [ -z "$JAVA_VERSION" ]; then
+            echo "Could not automatically determine Java version. Defaulting to 17."
+            JAVA_VERSION=17 
+          fi
+          echo "Detected Java Version: $JAVA_VERSION"
+          echo $JAVA_VERSION > ${{env.ANDROID_APP_PATH}}/.java-version
+        shell: bash
+
+      # Setup min version of Java required by Gradle
+      - name: Set up JDK dynamically
         uses: actions/setup-java@v5
         with:
-          java-version: "21"
+          java-version-file: ${{env.ANDROID_APP_PATH}}/.java-version
           distribution: "temurin"
 
       # Let gradle action handle all cache related to gradle operations
