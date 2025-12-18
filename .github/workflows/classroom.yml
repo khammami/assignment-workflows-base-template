@@ -38,30 +38,27 @@ jobs:
 
       # Repository checks
       # 1 - Check if the application folder contains an Android project
-      - name: Check for Android project (Exist)
+      - name: Auto-detect Android project
         shell: bash
         run: |
           set -euo pipefail
-          if [ -f "${{env.ANDROID_APP_PATH}}/build.gradle" ] || [ -f "${{env.ANDROID_APP_PATH}}/build.gradle.kts" ]; then
-              echo "Android project found"
-          else
-              echo "No Android project found"
-              exit 1
-          fi
 
-      # 2 - Check Gradle wrapper exists
-      - name: Check Gradle wrapper exists
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -f "${ANDROID_APP_PATH}/gradlew" ]; then
-            echo "Gradle wrapper found."
-          else
-            echo "Gradle wrapper not found at ${ANDROID_APP_PATH}/gradlew"
+          # Search for gradlew which indicates the root of an Android project
+          GRADLEW_PATH=$(find ${{env.ANDROID_APP_PATH}} -name "gradlew" -type f | head -n 1)
+
+          if [ -z "$GRADLEW_PATH" ]; then
+            echo "No Android project (gradlew) found under application/"
             exit 1
           fi
 
-      # 3 - Check for README.md
+          # Extract the directory containing gradlew
+          DETECTED_PATH=$(dirname "$GRADLEW_PATH")
+          echo "Android project detected at: $DETECTED_PATH"
+
+          # Override the ANDROID_APP_PATH environment variable
+          echo "ANDROID_APP_PATH=$DETECTED_PATH" >> $GITHUB_ENV
+
+      # 2 - Check for README.md
       - name: Check for README.md
         shell: bash
         run: |
