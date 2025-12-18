@@ -104,11 +104,65 @@ jobs:
           work-dir: ${{env.ANDROID_APP_PATH}}
           jv-fallback: 17
 
+      # Determine compatible Java version based on Gradle version
+      - name: Determine Java version for Gradle compatibility
+        id: java_version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          GRADLE_VERSION="${{ steps.java_info.outputs.builder_version }}"
+          IS_GRADLE="${{ steps.java_info.outputs.is_gradle }}"
+          FALLBACK_JAVA="${{ steps.java_info.outputs.java_version }}"
+
+          echo "Detected Gradle version: $GRADLE_VERSION"
+          echo "Is Gradle project: $IS_GRADLE"
+
+          # Function to compare versions
+          version_ge() {
+            printf '%s\n%s\n' "$2" "$1" | sort -V -C
+          }
+
+          # Determine Java version based on Gradle version
+          if [ "$IS_GRADLE" = "true" ] && [ -n "$GRADLE_VERSION" ]; then
+            if version_ge "$GRADLE_VERSION" "9.1.0"; then
+              JAVA_VERSION="21"  # Gradle 9.1.0+ supports up to Java 25, use LTS 21
+            elif version_ge "$GRADLE_VERSION" "8.14"; then
+              JAVA_VERSION="21"  # Gradle 8.14+ supports up to Java 24, use LTS 21
+            elif version_ge "$GRADLE_VERSION" "8.10"; then
+              JAVA_VERSION="21"  # Gradle 8.10+ supports up to Java 23, use LTS 21
+            elif version_ge "$GRADLE_VERSION" "8.8"; then
+              JAVA_VERSION="21"  # Gradle 8.8+ supports up to Java 22, use LTS 21
+            elif version_ge "$GRADLE_VERSION" "8.5"; then
+              JAVA_VERSION="21"  # Gradle 8.5+ supports Java 21
+            elif version_ge "$GRADLE_VERSION" "8.3"; then
+              JAVA_VERSION="17"  # Gradle 8.3+ supports up to Java 20, use LTS 17
+            elif version_ge "$GRADLE_VERSION" "7.6"; then
+              JAVA_VERSION="17"  # Gradle 7.6+ supports up to Java 19, use LTS 17
+            elif version_ge "$GRADLE_VERSION" "7.3"; then
+              JAVA_VERSION="17"  # Gradle 7.3+ supports Java 17
+            elif version_ge "$GRADLE_VERSION" "7.0"; then
+              JAVA_VERSION="11"  # Gradle 7.0+ supports up to Java 16, use LTS 11
+            elif version_ge "$GRADLE_VERSION" "6.7"; then
+              JAVA_VERSION="11"  # Gradle 6.7+ supports up to Java 15, use LTS 11
+            elif version_ge "$GRADLE_VERSION" "5.0"; then
+              JAVA_VERSION="11"  # Gradle 5.0+ supports Java 11
+            else
+              JAVA_VERSION="8"   # Gradle < 5.0 requires Java 8
+            fi
+            echo "Selected Java version based on Gradle $GRADLE_VERSION: $JAVA_VERSION"
+          else
+            JAVA_VERSION="$FALLBACK_JAVA"
+            echo "Using fallback Java version: $JAVA_VERSION"
+          fi
+
+          echo "java_version=$JAVA_VERSION" >> "$GITHUB_OUTPUT"
+
       # Setup min version of Java required by Gradle
       - name: Set up JDK dynamically
         uses: actions/setup-java@v5
         with:
-          java-version: ${{ steps.java_info.outputs.java_version }}
+          java-version: ${{ steps.java_version.outputs.java_version }}
           distribution: "temurin"
 
       # Let gradle action handle all cache related to gradle operations
@@ -117,54 +171,54 @@ jobs:
         with:
           cache-read-only: false # Allow write to cache beside default branch
 
-      - name: Android summary via Gradle (init script)
-        id: android_summary
-        shell: bash
-        env:
-          APP_PATH: ${{ env.ANDROID_APP_PATH }}
-        run: |
-          set -euo pipefail
-          cp .github/android-summary.init.gradle "$APP_PATH/"
+      # - name: Android summary via Gradle (init script)
+      #   id: android_summary
+      #   shell: bash
+      #   env:
+      #     APP_PATH: ${{ env.ANDROID_APP_PATH }}
+      #   run: |
+      #     set -euo pipefail
+      #     cp .github/android-summary.init.gradle "$APP_PATH/"
 
-          "$APP_PATH/gradlew" -p "$APP_PATH" -q --console=plain \
-            -I "android-summary.init.gradle" \
-            -Dandroid.summary.out="$PWD/android-summary.json" \
-            printAndroidSummary --no-configuration-cache
+      #     "$APP_PATH/gradlew" -p "$APP_PATH" -q --console=plain \
+      #       -I "android-summary.init.gradle" \
+      #       -Dandroid.summary.out="$PWD/android-summary.json" \
+      #       printAndroidSummary --no-configuration-cache
 
-          # Extract first application module values as individual outputs
-          min_sdk=$(jq -r '.modules[] | select(.type=="application") | .min_sdk' android-summary.json | head -n1)
-          target_sdk=$(jq -r '.modules[] | select(.type=="application") | .target_sdk' android-summary.json | head -n1)
-          compile_sdk=$(jq -r '.modules[] | select(.type=="application") | .compile_sdk' android-summary.json | head -n1)
-          package_name=$(jq -r '.modules[] | select(.type=="application") | .package_name' android-summary.json | head -n1)
-          version_name=$(jq -r '.modules[] | select(.type=="application") | .version_name' android-summary.json | head -n1)
-          version_code=$(jq -r '.modules[] | select(.type=="application") | .version_code' android-summary.json | head -n1)
-          language=$(jq -r '.modules[] | select(.type=="application") | .language' android-summary.json | head -n1)
+      #     # Extract first application module values as individual outputs
+      #     min_sdk=$(jq -r '.modules[] | select(.type=="application") | .min_sdk' android-summary.json | head -n1)
+      #     target_sdk=$(jq -r '.modules[] | select(.type=="application") | .target_sdk' android-summary.json | head -n1)
+      #     compile_sdk=$(jq -r '.modules[] | select(.type=="application") | .compile_sdk' android-summary.json | head -n1)
+      #     package_name=$(jq -r '.modules[] | select(.type=="application") | .package_name' android-summary.json | head -n1)
+      #     version_name=$(jq -r '.modules[] | select(.type=="application") | .version_name' android-summary.json | head -n1)
+      #     version_code=$(jq -r '.modules[] | select(.type=="application") | .version_code' android-summary.json | head -n1)
+      #     language=$(jq -r '.modules[] | select(.type=="application") | .language' android-summary.json | head -n1)
 
-          {
-            echo "min_sdk=$min_sdk"
-            echo "target_sdk=$target_sdk"
-            echo "compile_sdk=$compile_sdk"
-            echo "package_name=$package_name"
-            echo "version_name=$version_name"
-            echo "version_code=$version_code"
-            echo "language=$language"
-          } >> "$GITHUB_OUTPUT"
+      #     {
+      #       echo "min_sdk=$min_sdk"
+      #       echo "target_sdk=$target_sdk"
+      #       echo "compile_sdk=$compile_sdk"
+      #       echo "package_name=$package_name"
+      #       echo "version_name=$version_name"
+      #       echo "version_code=$version_code"
+      #       echo "language=$language"
+      #     } >> "$GITHUB_OUTPUT"
 
-      - name: Android project summary
-        if: always()
-        run: |
-          {
-            echo "## Android Project Summary"
-            echo
-            echo "**Package:** ${{ steps.android_summary.outputs.package_name }}"
-            echo "- minSdk: ${{ steps.android_summary.outputs.min_sdk }}"
-            echo "- targetSdk: ${{ steps.android_summary.outputs.target_sdk }}"
-            echo "- compileSdk: ${{ steps.android_summary.outputs.compile_sdk }}"
-            echo "- versionName: ${{ steps.android_summary.outputs.version_name }}"
-            echo "- versionCode: ${{ steps.android_summary.outputs.version_code }}"
-            echo "- language: ${{ steps.android_summary.outputs.language }}"
-            echo
-          } >> "$GITHUB_STEP_SUMMARY"
+      # - name: Android project summary
+      #   if: always()
+      #   run: |
+      #     {
+      #       echo "## Android Project Summary"
+      #       echo
+      #       echo "**Package:** ${{ steps.android_summary.outputs.package_name }}"
+      #       echo "- minSdk: ${{ steps.android_summary.outputs.min_sdk }}"
+      #       echo "- targetSdk: ${{ steps.android_summary.outputs.target_sdk }}"
+      #       echo "- compileSdk: ${{ steps.android_summary.outputs.compile_sdk }}"
+      #       echo "- versionName: ${{ steps.android_summary.outputs.version_name }}"
+      #       echo "- versionCode: ${{ steps.android_summary.outputs.version_code }}"
+      #       echo "- language: ${{ steps.android_summary.outputs.language }}"
+      #       echo
+      #     } >> "$GITHUB_STEP_SUMMARY"
 
       # Create env that need to be injected to child process
       - name: Create file for setting env vars
