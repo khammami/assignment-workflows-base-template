@@ -97,83 +97,18 @@ jobs:
       - name: Copy CI gradle.properties
         run: mkdir -p ~/.gradle ; cp .github/ci-gradle.properties ~/.gradle/gradle.properties
 
-      - name: Determine Java version from Gradle wrapper
-        run: |
-          set -euo pipefail
-          
-          # Extract Gradle version from gradle-wrapper.properties
-          WRAPPER_PROPS="${{env.ANDROID_APP_PATH}}/gradle/wrapper/gradle-wrapper.properties"
-          
-          if [ ! -f "$WRAPPER_PROPS" ]; then
-            echo "gradle-wrapper.properties not found. Defaulting to Java 17."
-            JAVA_VERSION=17
-          else
-            GRADLE_VERSION=$(grep "distributionUrl" "$WRAPPER_PROPS" | sed -E 's/.*gradle-([0-9]+\.[0-9]+).*/\1/' || echo "")
-            
-            if [ -z "$GRADLE_VERSION" ]; then
-              echo "Could not extract Gradle version. Defaulting to Java 17."
-              JAVA_VERSION=17
-            else
-              echo "Detected Gradle version: $GRADLE_VERSION"
-              
-              # Map Gradle version to minimum required Java version
-              # Reference: https://docs.gradle.org/current/userguide/compatibility.html
-              GRADLE_MAJOR=$(echo "$GRADLE_VERSION" | cut -d'.' -f1)
-              GRADLE_MINOR=$(echo "$GRADLE_VERSION" | cut -d'.' -f2)
-              
-              if [ "$GRADLE_MAJOR" -ge 10 ] || ([ "$GRADLE_MAJOR" -eq 9 ] && [ "$GRADLE_MINOR" -ge 1 ]); then
-                JAVA_VERSION=25
-              elif [ "$GRADLE_MAJOR" -eq 9 ] || ([ "$GRADLE_MAJOR" -eq 8 ] && [ "$GRADLE_MINOR" -ge 14 ]); then
-                JAVA_VERSION=24
-              elif [ "$GRADLE_MAJOR" -eq 8 ] && [ "$GRADLE_MINOR" -ge 10 ]; then
-                JAVA_VERSION=23
-              elif [ "$GRADLE_MAJOR" -eq 8 ] && [ "$GRADLE_MINOR" -ge 8 ]; then
-                JAVA_VERSION=22
-              elif [ "$GRADLE_MAJOR" -eq 8 ] && [ "$GRADLE_MINOR" -ge 5 ]; then
-                JAVA_VERSION=21
-              elif [ "$GRADLE_MAJOR" -eq 8 ] && [ "$GRADLE_MINOR" -ge 3 ]; then
-                JAVA_VERSION=20
-              elif [ "$GRADLE_MAJOR" -eq 8 ] && [ "$GRADLE_MINOR" -ge 1 ]; then
-                JAVA_VERSION=20
-              elif [ "$GRADLE_MAJOR" -eq 8 ] || ([ "$GRADLE_MAJOR" -eq 7 ] && [ "$GRADLE_MINOR" -ge 6 ]); then
-                JAVA_VERSION=19
-              elif [ "$GRADLE_MAJOR" -eq 7 ] && [ "$GRADLE_MINOR" -eq 5 ]; then
-                JAVA_VERSION=18
-              elif [ "$GRADLE_MAJOR" -eq 7 ] && [ "$GRADLE_MINOR" -ge 3 ]; then
-                JAVA_VERSION=17
-              elif [ "$GRADLE_MAJOR" -eq 7 ]; then
-                JAVA_VERSION=16
-              elif [ "$GRADLE_MAJOR" -eq 6 ] && [ "$GRADLE_MINOR" -ge 7 ]; then
-                JAVA_VERSION=15
-              elif [ "$GRADLE_MAJOR" -eq 6 ] && [ "$GRADLE_MINOR" -ge 3 ]; then
-                JAVA_VERSION=14
-              elif [ "$GRADLE_MAJOR" -eq 6 ]; then
-                JAVA_VERSION=13
-              elif [ "$GRADLE_MAJOR" -eq 5 ] && [ "$GRADLE_MINOR" -ge 4 ]; then
-                JAVA_VERSION=12
-              elif [ "$GRADLE_MAJOR" -eq 5 ]; then
-                JAVA_VERSION=11
-              elif [ "$GRADLE_MAJOR" -eq 4 ] && [ "$GRADLE_MINOR" -ge 7 ]; then
-                JAVA_VERSION=10
-              elif [ "$GRADLE_MAJOR" -eq 4 ] && [ "$GRADLE_MINOR" -ge 3 ]; then
-                JAVA_VERSION=9
-              else
-                JAVA_VERSION=8
-              fi
-              
-              echo "Based on Gradle $GRADLE_VERSION, minimum required Java is $JAVA_VERSION"
-            fi
-          fi
-          
-          echo "Selected Java Version: $JAVA_VERSION"
-          echo $JAVA_VERSION > ${{env.ANDROID_APP_PATH}}/.java-version
-        shell: bash
+      - name: "Read Java Info"
+        id: "java_info"
+        uses: YunaBraska/java-info-action@main
+        with:
+          work-dir: ${{env.ANDROID_APP_PATH}}
+          jv-fallback: 17
 
       # Setup min version of Java required by Gradle
       - name: Set up JDK dynamically
         uses: actions/setup-java@v5
         with:
-          java-version-file: ${{env.ANDROID_APP_PATH}}/.java-version
+          java-version: ${{ steps.java_info.outputs.java_version }}
           distribution: "temurin"
 
       # Let gradle action handle all cache related to gradle operations
