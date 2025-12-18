@@ -97,59 +97,75 @@ jobs:
       - name: Copy CI gradle.properties
         run: mkdir -p ~/.gradle ; cp .github/ci-gradle.properties ~/.gradle/gradle.properties
 
-      - name: Extract Java version from Gradle files
+      - name: Determine Java version from Gradle wrapper
         run: |
           set -euo pipefail
-          JAVA_VERSION=""
-
-          # Check app module build files first (build.gradle or build.gradle.kts)
-          for BUILD_FILE in "${{env.ANDROID_APP_PATH}}/app/build.gradle.kts" "${{env.ANDROID_APP_PATH}}/app/build.gradle" "${{env.ANDROID_APP_PATH}}/build.gradle.kts" "${{env.ANDROID_APP_PATH}}/build.gradle"; do
-            if [ -f "$BUILD_FILE" ]; then
-              echo "Checking $BUILD_FILE for Java version..."
+          
+          # Extract Gradle version from gradle-wrapper.properties
+          WRAPPER_PROPS="${{env.ANDROID_APP_PATH}}/gradle/wrapper/gradle-wrapper.properties"
+          
+          if [ ! -f "$WRAPPER_PROPS" ]; then
+            echo "gradle-wrapper.properties not found. Defaulting to Java 17."
+            JAVA_VERSION=17
+          else
+            GRADLE_VERSION=$(grep "distributionUrl" "$WRAPPER_PROPS" | sed -E 's/.*gradle-([0-9]+\.[0-9]+).*/\1/' || echo "")
+            
+            if [ -z "$GRADLE_VERSION" ]; then
+              echo "Could not extract Gradle version. Defaulting to Java 17."
+              JAVA_VERSION=17
+            else
+              echo "Detected Gradle version: $GRADLE_VERSION"
               
-              # Try to extract version number from various formats:
-              # JavaVersion.VERSION_1_8 or JavaVersion.VERSION_11 -> 8 or 11
-              # sourceCompatibility = "17" -> 17
-              # sourceCompatibility = 17 -> 17
-              # sourceCompatibility JavaVersion.toVersion("11") -> 11
-              JAVA_VERSION=$(grep -E "(sourceCompatibility|targetCompatibility)" "$BUILD_FILE" | head -n1 | \
-                sed -E 's/.*VERSION_1_([0-9]+).*/\1/; s/.*VERSION_([0-9]+).*/\1/; s/.*[=:]\s*"?([0-9]+)"?.*/\1/; s/.*toVersion\("([0-9]+)"\).*/\1/' | \
-                grep -E '^[0-9]+$' || true)
+              # Map Gradle version to minimum required Java version
+              # Reference: https://docs.gradle.org/current/userguide/compatibility.html
+              GRADLE_MAJOR=$(echo "$GRADLE_VERSION" | cut -d'.' -f1)
+              GRADLE_MINOR=$(echo "$GRADLE_VERSION" | cut -d'.' -f2)
               
-              if [ -n "$JAVA_VERSION" ]; then
-                echo "Found Java version from compatibility settings: $JAVA_VERSION"
-                break
+              if [ "$GRADLE_MAJOR" -ge 10 ] || ([ "$GRADLE_MAJOR" -eq 9 ] && [ "$GRADLE_MINOR" -ge 1 ]); then
+                JAVA_VERSION=25
+              elif [ "$GRADLE_MAJOR" -eq 9 ] || ([ "$GRADLE_MAJOR" -eq 8 ] && [ "$GRADLE_MINOR" -ge 14 ]); then
+                JAVA_VERSION=24
+              elif [ "$GRADLE_MAJOR" -eq 8 ] && [ "$GRADLE_MINOR" -ge 10 ]; then
+                JAVA_VERSION=23
+              elif [ "$GRADLE_MAJOR" -eq 8 ] && [ "$GRADLE_MINOR" -ge 8 ]; then
+                JAVA_VERSION=22
+              elif [ "$GRADLE_MAJOR" -eq 8 ] && [ "$GRADLE_MINOR" -ge 5 ]; then
+                JAVA_VERSION=21
+              elif [ "$GRADLE_MAJOR" -eq 8 ] && [ "$GRADLE_MINOR" -ge 3 ]; then
+                JAVA_VERSION=20
+              elif [ "$GRADLE_MAJOR" -eq 8 ] && [ "$GRADLE_MINOR" -ge 1 ]; then
+                JAVA_VERSION=20
+              elif [ "$GRADLE_MAJOR" -eq 8 ] || ([ "$GRADLE_MAJOR" -eq 7 ] && [ "$GRADLE_MINOR" -ge 6 ]); then
+                JAVA_VERSION=19
+              elif [ "$GRADLE_MAJOR" -eq 7 ] && [ "$GRADLE_MINOR" -eq 5 ]; then
+                JAVA_VERSION=18
+              elif [ "$GRADLE_MAJOR" -eq 7 ] && [ "$GRADLE_MINOR" -ge 3 ]; then
+                JAVA_VERSION=17
+              elif [ "$GRADLE_MAJOR" -eq 7 ]; then
+                JAVA_VERSION=16
+              elif [ "$GRADLE_MAJOR" -eq 6 ] && [ "$GRADLE_MINOR" -ge 7 ]; then
+                JAVA_VERSION=15
+              elif [ "$GRADLE_MAJOR" -eq 6 ] && [ "$GRADLE_MINOR" -ge 3 ]; then
+                JAVA_VERSION=14
+              elif [ "$GRADLE_MAJOR" -eq 6 ]; then
+                JAVA_VERSION=13
+              elif [ "$GRADLE_MAJOR" -eq 5 ] && [ "$GRADLE_MINOR" -ge 4 ]; then
+                JAVA_VERSION=12
+              elif [ "$GRADLE_MAJOR" -eq 5 ]; then
+                JAVA_VERSION=11
+              elif [ "$GRADLE_MAJOR" -eq 4 ] && [ "$GRADLE_MINOR" -ge 7 ]; then
+                JAVA_VERSION=10
+              elif [ "$GRADLE_MAJOR" -eq 4 ] && [ "$GRADLE_MINOR" -ge 3 ]; then
+                JAVA_VERSION=9
+              else
+                JAVA_VERSION=8
               fi
+              
+              echo "Based on Gradle $GRADLE_VERSION, minimum required Java is $JAVA_VERSION"
             fi
-          done
-
-          # Try toolchain configuration if not found
-          if [ -z "$JAVA_VERSION" ]; then
-            echo "Attempting to extract Java version from toolchain configuration..."
-            for BUILD_FILE in "${{env.ANDROID_APP_PATH}}/app/build.gradle.kts" "${{env.ANDROID_APP_PATH}}/app/build.gradle" "${{env.ANDROID_APP_PATH}}/build.gradle.kts" "${{env.ANDROID_APP_PATH}}/build.gradle"; do
-              if [ -f "$BUILD_FILE" ]; then
-                JAVA_VERSION=$(grep -Pzo '(?s)toolchains.*?languageVersion\s*=\s*JavaVersion\.of\("?\K[0-9]+' "$BUILD_FILE" | tr -d '\0' || true)
-                if [ -n "$JAVA_VERSION" ]; then
-                  echo "Found Java version from toolchain: $JAVA_VERSION"
-                  break
-                fi
-              fi
-            done
           fi
-
-          # Default to 17 if still not found
-          if [ -z "$JAVA_VERSION" ]; then
-            echo "Could not automatically determine Java version. Defaulting to 17."
-            JAVA_VERSION=17 
-          fi
-
-          # Enforce minimum Java 11 (required by modern Android Gradle Plugin 7.0+)
-          if [ "$JAVA_VERSION" -lt 11 ]; then
-            echo "Detected Java $JAVA_VERSION, but Android Gradle Plugin requires minimum Java 11. Upgrading to Java 11."
-            JAVA_VERSION=11
-          fi
-
-          echo "Detected Java Version: $JAVA_VERSION"
+          
+          echo "Selected Java Version: $JAVA_VERSION"
           echo $JAVA_VERSION > ${{env.ANDROID_APP_PATH}}/.java-version
         shell: bash
 
