@@ -143,6 +143,12 @@ jobs:
             JAVA_VERSION=17 
           fi
 
+          # Enforce minimum Java 11 (required by modern Android Gradle Plugin 7.0+)
+          if [ "$JAVA_VERSION" -lt 11 ]; then
+            echo "Detected Java $JAVA_VERSION, but Android Gradle Plugin requires minimum Java 11. Upgrading to Java 11."
+            JAVA_VERSION=11
+          fi
+
           echo "Detected Java Version: $JAVA_VERSION"
           echo $JAVA_VERSION > ${{env.ANDROID_APP_PATH}}/.java-version
         shell: bash
