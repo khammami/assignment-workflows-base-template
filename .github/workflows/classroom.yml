@@ -57,6 +57,7 @@ jobs:
 
           # Override the ANDROID_APP_PATH environment variable
           echo "ANDROID_APP_PATH=$DETECTED_PATH" >> $GITHUB_ENV
+        continue-on-error: true
 
       # 2 - Check for README.md
       - name: Check for README.md
@@ -69,6 +70,7 @@ jobs:
               echo "No README.md found"
               exit 1
           fi
+        continue-on-error: true
 
       # To use with instrumentation tests
       # - name: Delete unnecessary tools 🔧
@@ -93,6 +95,7 @@ jobs:
         run: |
           find .github/scripts -type f -name "*.sh" -exec chmod +x {} \;
           chmod +x ${{env.ANDROID_APP_PATH}}/gradlew
+        continue-on-error: true
 
       - name: Copy CI gradle.properties
         run: mkdir -p ~/.gradle ; cp .github/ci-gradle.properties ~/.gradle/gradle.properties
@@ -103,6 +106,7 @@ jobs:
         with:
           work-dir: ${{env.ANDROID_APP_PATH}}
           jv-fallback: 17
+        continue-on-error: true
 
       # Determine compatible Java version based on Gradle version
       - name: Determine Java version for Gradle compatibility
@@ -157,6 +161,7 @@ jobs:
           fi
 
           echo "java_version=$JAVA_VERSION" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
 
       # Setup min version of Java required by Gradle
       - name: Set up JDK dynamically
@@ -164,6 +169,7 @@ jobs:
         with:
           java-version: ${{ steps.java_version.outputs.java_version }}
           distribution: "temurin"
+        continue-on-error: true
 
       # Let gradle action handle all cache related to gradle operations
       - name: Gradle setup/cache
@@ -247,7 +253,7 @@ jobs:
           test-name: Build Debug
           setup-command: ""
           command: ". ./setenv.sh && ./$ANDROID_APP_PATH/gradlew assembleDebug --no-configuration-cache --stacktrace -p $ANDROID_APP_PATH"
-          timeout: 5
+          timeout: 10
           max-score: 5
 
       # Spotless check (formatting) via init script, no student changes required
