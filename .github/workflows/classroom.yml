@@ -12,6 +12,7 @@ permissions:
   checks: write
   actions: read
   contents: read
+  issues: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
@@ -127,34 +128,17 @@ jobs:
             printf '%s\n%s\n' "$2" "$1" | sort -V -C
           }
 
-          # Determine Java version based on Gradle version
           if [ "$IS_GRADLE" = "true" ] && [ -n "$GRADLE_VERSION" ]; then
-            if version_ge "$GRADLE_VERSION" "9.1.0"; then
-              JAVA_VERSION="21"  # Gradle 9.1.0+ supports up to Java 25, use LTS 21
-            elif version_ge "$GRADLE_VERSION" "8.14"; then
-              JAVA_VERSION="21"  # Gradle 8.14+ supports up to Java 24, use LTS 21
-            elif version_ge "$GRADLE_VERSION" "8.10"; then
-              JAVA_VERSION="21"  # Gradle 8.10+ supports up to Java 23, use LTS 21
-            elif version_ge "$GRADLE_VERSION" "8.8"; then
-              JAVA_VERSION="21"  # Gradle 8.8+ supports up to Java 22, use LTS 21
-            elif version_ge "$GRADLE_VERSION" "8.5"; then
-              JAVA_VERSION="21"  # Gradle 8.5+ supports Java 21
-            elif version_ge "$GRADLE_VERSION" "8.3"; then
-              JAVA_VERSION="17"  # Gradle 8.3+ supports up to Java 20, use LTS 17
-            elif version_ge "$GRADLE_VERSION" "7.6"; then
-              JAVA_VERSION="17"  # Gradle 7.6+ supports up to Java 19, use LTS 17
+            if version_ge "$GRADLE_VERSION" "8.5"; then
+              JAVA_VERSION="21"
             elif version_ge "$GRADLE_VERSION" "7.3"; then
-              JAVA_VERSION="17"  # Gradle 7.3+ supports Java 17
-            elif version_ge "$GRADLE_VERSION" "7.0"; then
-              JAVA_VERSION="11"  # Gradle 7.0+ supports up to Java 16, use LTS 11
-            elif version_ge "$GRADLE_VERSION" "6.7"; then
-              JAVA_VERSION="11"  # Gradle 6.7+ supports up to Java 15, use LTS 11
+              JAVA_VERSION="17"
             elif version_ge "$GRADLE_VERSION" "5.0"; then
-              JAVA_VERSION="11"  # Gradle 5.0+ supports Java 11
+              JAVA_VERSION="11"
             else
-              JAVA_VERSION="8"   # Gradle < 5.0 requires Java 8
+              JAVA_VERSION="8"
             fi
-            echo "Selected Java version based on Gradle $GRADLE_VERSION: $JAVA_VERSION"
+            echo "Selected Java $JAVA_VERSION for Gradle $GRADLE_VERSION"
           else
             JAVA_VERSION="$FALLBACK_JAVA"
             echo "Using fallback Java version: $JAVA_VERSION"
@@ -267,12 +251,16 @@ jobs:
           timeout: 5
           max-score: 2
 
+      - name: Decrypt answers
+        run: ". ./setenv.sh && ./.github/scripts/decrypt_answers.sh"
+        continue-on-error: true
+
       - name: Q1
         id: q1
         uses: classroom-resources/autograding-command-grader@v1
         with:
           test-name: Q1
-          setup-command: ". ./setenv.sh && ./.github/scripts/decrypt_answers.sh"
+          setup-command: ""
           command: ". ./setenv.sh && ./.github/scripts/check_questions.sh 1"
           timeout: 1
           max-score: 1
@@ -282,7 +270,7 @@ jobs:
         uses: classroom-resources/autograding-command-grader@v1
         with:
           test-name: Q2
-          setup-command: ". ./setenv.sh && ./.github/scripts/decrypt_answers.sh"
+          setup-command: ""
           command: ". ./setenv.sh && ./.github/scripts/check_questions.sh 2"
           timeout: 1
           max-score: 1
@@ -292,7 +280,7 @@ jobs:
         uses: classroom-resources/autograding-command-grader@v1
         with:
           test-name: Q3
-          setup-command: ". ./setenv.sh && ./.github/scripts/decrypt_answers.sh"
+          setup-command: ""
           command: ". ./setenv.sh && ./.github/scripts/check_questions.sh 3"
           timeout: 1
           max-score: 1
@@ -302,7 +290,7 @@ jobs:
         uses: classroom-resources/autograding-command-grader@v1
         with:
           test-name: Q4
-          setup-command: ". ./setenv.sh && ./.github/scripts/decrypt_answers.sh"
+          setup-command: ""
           command: ". ./setenv.sh && ./.github/scripts/check_questions.sh 4"
           timeout: 1
           max-score: 1
@@ -318,3 +306,112 @@ jobs:
           Q4_RESULTS: "${{steps.q4.outputs.result}}"
         with:
           runners: build-debug,spotless,q1,q2,q3,q4
+
+      - name: Post grading summary
+        if: always()
+        run: |
+          echo "## 📝 Autograding Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          for step_result in \
+            "Build Debug:${{ steps.build-debug.outcome }}" \
+            "Spotless:${{ steps.spotless.outcome }}" \
+            "Q1:${{ steps.q1.outcome }}" \
+            "Q2:${{ steps.q2.outcome }}" \
+            "Q3:${{ steps.q3.outcome }}" \
+            "Q4:${{ steps.q4.outcome }}"; do
+            name="${step_result%%:*}"
+            result="${step_result##*:}"
+            icon=$( [ "$result" = "success" ] && echo "✅" || echo "❌" )
+            echo "| $name | $icon |" >> $GITHUB_STEP_SUMMARY
+          done
+
+      - name: Create/Update feedback issue on failure
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const results = {
+              'Build Debug': '${{ steps.build-debug.outcome }}',
+              'Spotless': '${{ steps.spotless.outcome }}',
+              'Q1': '${{ steps.q1.outcome }}',
+              'Q2': '${{ steps.q2.outcome }}',
+              'Q3': '${{ steps.q3.outcome }}',
+              'Q4': '${{ steps.q4.outcome }}',
+            };
+
+            const failed = Object.entries(results).filter(([, v]) => v !== 'success');
+            if (failed.length === 0) {
+              const { data: issues } = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: 'autograding-feedback',
+                state: 'open',
+              });
+              for (const issue of issues) {
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: 'closed',
+                  state_reason: 'completed',
+                });
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: '🎉 All tests passed! Great work!',
+                });
+              }
+              return;
+            }
+
+            const icon = (s) => s === 'success' ? '✅' : '❌';
+            let body = `## 📋 Autograding Feedback\n\n`;
+            body += `| Test | Status |\n|------|--------|\n`;
+            for (const [name, status] of Object.entries(results)) {
+              body += `| ${name} | ${icon(status)} |\n`;
+            }
+            body += `\n---\n\n### 💡 Tips\n\n`;
+
+            if (results['Build Debug'] !== 'success') {
+              body += `- **Build Debug failed**: Make sure your Android project is inside the \`application/\` folder and compiles without errors.\n`;
+            }
+            if (results['Spotless'] !== 'success') {
+              body += `- **Spotless failed**: Run \`./gradlew --init-script .github/spotless.init.gradle spotlessApply\` locally to auto-fix formatting.\n`;
+            }
+            const qFailed = ['Q1','Q2','Q3','Q4'].filter(q => results[q] !== 'success');
+            if (qFailed.length > 0) {
+              body += `- **Questions ${qFailed.join(', ')} failed**: Review your answers in \`README.md\`. Make sure you check exactly one answer per question using \`[x]\`.\n`;
+            }
+
+            body += `\n> Run #${context.runNumber} — [View workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})\n`;
+
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'autograding-feedback',
+              state: 'open',
+            });
+
+            if (existing.length > 0) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing[0].number,
+                body: body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🚨 Autograding: Some tests are failing',
+                body: body,
+                labels: ['autograding-feedback'],
+              });
+            }
+
+      - name: Clean up secrets
+        if: always()
+        run: rm -f setenv.sh

@@ -31,7 +31,15 @@ jobs:
           fi
 
           gh pr create \
-            --title "Auto PR: $BRANCH_NAME" \
-            --body "This pull request was automatically created for branch \`$BRANCH_NAME\`" \
+            --title "Soumission: $BRANCH_NAME" \
+            --body "## ✅ Checklist avant soumission
+
+          - [ ] Mon application compile sans erreurs
+          - [ ] J'ai répondu aux 4 questions dans README.md
+          - [ ] Le formatage Spotless passe localement
+          - [ ] Mon projet est dans le dossier \`application/\`
+
+          ---
+          _PR créée automatiquement pour la branche \`$BRANCH_NAME\`_" \
             --base main \
             --head "$BRANCH_NAME"
