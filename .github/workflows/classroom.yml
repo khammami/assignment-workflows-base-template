@@ -296,6 +296,12 @@ jobs:
           echo "passed=$PASSED" >> "$GITHUB_OUTPUT"
           echo "failed_list=$FAILED_LIST" >> "$GITHUB_OUTPUT"
 
+          # Build reporter-compatible result output (required by autograding-grading-reporter)
+          OVERALL_STATUS=$( [ "$PASSED" -eq "$TOTAL_Q" ] && echo "pass" || echo "fail" )
+          REPORTER_TESTS=$(jq '[.[] | {name: .name, status: .status, score: (if .status == "pass" then 1 else 0 end), message: "", test_code: ("./.github/scripts/check_questions.sh " + (.name | ltrimstr("Q"))), filename: "", line_no: 0, duration: 0}]' question-results.json)
+          REPORTER_JSON=$(jq -nc --arg status "$OVERALL_STATUS" --argjson max "$TOTAL_Q" --argjson tests "$REPORTER_TESTS" '{"version":1,"status":$status,"max_score":$max,"tests":$tests}')
+          echo "result=$(echo "$REPORTER_JSON" | base64 -w 0)" >> "$GITHUB_OUTPUT"
+
           # Fail the step if any question failed
           if [ "$PASSED" -lt "$TOTAL_Q" ]; then
             echo "outcome=failure" >> "$GITHUB_OUTPUT"
