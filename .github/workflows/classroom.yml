@@ -319,6 +319,9 @@ jobs:
 
       - name: Post grading summary
         if: always()
+        env:
+          BUILD_DEBUG_RESULT: "${{ steps.build-debug.outputs.result }}"
+          SPOTLESS_RESULT: "${{ steps.spotless.outputs.result }}"
         shell: bash
         run: |
           echo "## 📝 Autograding Results" >> $GITHUB_STEP_SUMMARY
@@ -326,13 +329,15 @@ jobs:
           echo "| Test | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
 
-          # Fixed steps
-          for step_result in \
-            "Build Debug:${{ steps.build-debug.outcome }}" \
-            "Spotless:${{ steps.spotless.outcome }}"; do
-            name="${step_result%%:*}"
-            result="${step_result##*:}"
-            icon=$( [ "$result" = "success" ] && echo "✅" || echo "❌" )
+          # Decode base64 result JSON from autograding-command-grader to get real pass/fail
+          # (.outcome is always "success" because the action never fails the step)
+          build_debug_status=$(echo "$BUILD_DEBUG_RESULT" | base64 -d 2>/dev/null | jq -r '.status // "fail"' 2>/dev/null || echo "fail")
+          spotless_status=$(echo "$SPOTLESS_RESULT" | base64 -d 2>/dev/null | jq -r '.status // "fail"' 2>/dev/null || echo "fail")
+
+          for entry in "Build Debug:$build_debug_status" "Spotless:$spotless_status"; do
+            name="${entry%%:*}"
+            status="${entry##*:}"
+            icon=$( [ "$status" = "pass" ] && echo "✅" || echo "❌" )
             echo "| $name | $icon |" >> $GITHUB_STEP_SUMMARY
           done
 
@@ -344,14 +349,29 @@ jobs:
       - name: Create/Update feedback issue
         if: always()
         uses: actions/github-script@v7
+        env:
+          BUILD_DEBUG_RESULT: "${{ steps.build-debug.outputs.result }}"
+          SPOTLESS_RESULT: "${{ steps.spotless.outputs.result }}"
         with:
           script: |
             const fs = require('fs');
 
+            // Decode base64 result JSON from autograding-command-grader to get real pass/fail.
+            // Using .outcome would always return 'success' because the action never fails the step.
+            const decodeResult = (b64) => {
+              if (!b64) return 'failure';
+              try {
+                const json = Buffer.from(b64, 'base64').toString('utf8');
+                return JSON.parse(json).status === 'pass' ? 'success' : 'failure';
+              } catch (e) {
+                return 'failure';
+              }
+            };
+
             // Fixed grading steps
             const results = {
-              'Build Debug': '${{ steps.build-debug.outcome }}',
-              'Spotless': '${{ steps.spotless.outcome }}',
+              'Build Debug': decodeResult(process.env.BUILD_DEBUG_RESULT),
+              'Spotless': decodeResult(process.env.SPOTLESS_RESULT),
             };
 
             // Dynamic question results
