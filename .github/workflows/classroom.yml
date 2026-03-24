@@ -252,16 +252,13 @@ jobs:
           timeout: 5
           max-score: 2
 
-      - name: Decrypt answers
-        run: ". ./setenv.sh && ./.github/scripts/decrypt_answers.sh"
-        continue-on-error: true
-
       - name: Grade Questions
         id: grade-questions
         shell: bash
         run: |
           set -uo pipefail
           . ./setenv.sh
+          ./.github/scripts/decrypt_answers.sh || true
 
           # Auto-detect the number of questions from README.md
           TOTAL_Q=$(grep -cP '^\*\*Q\d+\.\*\*' "${README_PATH}/README.md" || echo "0")
