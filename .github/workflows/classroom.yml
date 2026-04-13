@@ -348,7 +348,7 @@ jobs:
 
       - name: Create/Update feedback issue
         if: always()
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           BUILD_DEBUG_RESULT: "${{ steps.build-debug.outputs.result }}"
           SPOTLESS_RESULT: "${{ steps.spotless.outputs.result }}"
